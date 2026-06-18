@@ -62,8 +62,34 @@ function App() {
 
   const handleFinalize = () => {
   setIsFinalizing(true);
+  
+  // Capturamos el valor actual de los sets completados ANTES del delay de salida
+  const finalSetsCount = setsCompleted || 1;
 
-  const handleClearCanvas = async () => {
+  setTimeout(() => {
+    setSpheres(prev => prev.map(s => 
+      s.id === activeSphere.id 
+        ? { ...s, is_finalized: true, setsCompleted: finalSetsCount } 
+        : s
+    ));
+    
+    // Salida limpia al éter
+    setActiveSphere(null);
+    setStep(1);
+    setMode('input');
+    setSetsCompleted(0);
+    setIsGuided(true);
+    setSubtasks([
+      { id: 1, text: '', completed: false },
+      { id: 2, text: '', completed: false },
+      { id: 3, text: '', completed: false }
+    ]);
+    
+    setIsFinalizing(false);
+  }, 1000); // Reducido a 1 segundo para evitar pérdida de estados reactivos
+};
+
+const handleClearCanvas = async () => {
   // 1. Limpieza visual inmediata en el estado de React
   setCanvasPolygons([]);
 
@@ -95,32 +121,6 @@ function App() {
       setSpheres(pendingData.map(t => ({ ...t, is_in_canvas: false })));
     }
   }
-};
-  
-  // Capturamos el valor actual de los sets completados ANTES del delay de salida
-  const finalSetsCount = setsCompleted || 1;
-
-  setTimeout(() => {
-    setSpheres(prev => prev.map(s => 
-      s.id === activeSphere.id 
-        ? { ...s, is_finalized: true, setsCompleted: finalSetsCount } 
-        : s
-    ));
-    
-    // Salida limpia al éter
-    setActiveSphere(null);
-    setStep(1);
-    setMode('input');
-    setSetsCompleted(0);
-    setIsGuided(true);
-    setSubtasks([
-      { id: 1, text: '', completed: false },
-      { id: 2, text: '', completed: false },
-      { id: 3, text: '', completed: false }
-    ]);
-    
-    setIsFinalizing(false);
-  }, 1000); // Reducido a 1 segundo para evitar pérdida de estados reactivos
 };
 
   const getShapeStyle = (sets) => {
