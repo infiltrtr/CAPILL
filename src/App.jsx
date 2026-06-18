@@ -25,6 +25,9 @@ function App() {
   const cellsRef = React.useRef([]); // Referencia a las 9 celdas para medir sus posiciones
   const [gridOccupancy, setGridOccupancy] = useState(Array(9).fill(null)); // [null, task_id, null...]
 
+  // Estado para guardar la colección de acuarelas estampadas en el lienzo libre
+  const [canvasPolygons, setCanvasPolygons] = useState([]); // [{ id, title, color, x, y, finalSets }]
+
   // Estados para la coreografía de inmersión
   const [subtasks, setSubtasks] = useState([
     { id: 1, text: '', completed: false },
@@ -174,71 +177,82 @@ function App() {
   const handleDragEnd = (event, info, task) => {
   if (!canvasRef.current) return;
 
-  // 1. Obtener la posición exacta donde se soltó el cursor/dedo
+  // 1. Obtener la posición del cursor y los límites del rectángulo contenedor central
   const dropX = info.point.x;
   const dropY = info.point.y;
+  const rect = canvasRef.current.getBoundingClientRect();
 
-  let closestCellIndex = -1;
-  let minDistance = 120; // Radio de atracción magnética en píxeles
+  // 2. Verificar si se soltó dentro de la Zona Segura Central (Safe Area)
+  const isInsideCanvas = (
+    dropX >= rect.left &&
+    dropX <= rect.right &&
+    dropY >= rect.top &&
+    dropY <= rect.bottom
+  );
 
-  // 2. Buscar cuál es la celda más cercana
-  cellsRef.current.forEach((cell, index) => {
-    if (!cell) return;
-    const rect = cell.getBoundingClientRect();
-    const cellCenterX = rect.left + rect.width / 2;
-    const cellCenterY = rect.top + rect.height / 2;
+  if (isInsideCanvas) {
+    // Calcular en qué cuadrante numérico cayó (opcional, para tu metadata/Supabase)
+    const col = Math.floor(((dropX - rect.left) / rect.width) * 3);
+    const row = Math.floor(((dropY - rect.top) / rect.height) * 3);
+    const gridIndex = Math.clamp?.(row * 3 + col, 0, 8) || (row * 3 + col);
 
-    const distance = Math.hypot(dropX - cellCenterX, dropY - cellCenterY);
+    // 3. ¡EFECTO ESTAMPA!: Guardamos la figura en las coordenadas exactas donde se soltó
+    // Restamos el origen del contenedor para que la posición sea relativa y responsiva
+    const newPolygon = {
+      id: task.id,
+      title: task.title,
+      color: task.color,
+      x: dropX - rect.left - 28, // Centramos los 56px (w-14) de la figura en el cursor
+      y: dropY - rect.top - 28,
+      finalSets: task.finalSets || 3
+    };
 
-    if (distance < minDistance) {
-      minDistance = distance;
-      closestCellIndex = index;
-    }
-  });
+    setCanvasPolygons(prev => [...prev, newPolygon]);
 
-  // 3. Evaluar el resultado de la succión
-  if (closestCellIndex !== -1 && !gridOccupancy[closestCellIndex]) {
-    // ¡ÉXITO! Celda encontrada y vacía
-    
-    // Ocupamos la celda en el Grid
-    setGridOccupancy(prev => {
-      const next = [...prev];
-      next[closestCellIndex] = task.id;
-      return next;
-    });
-
-    // Marcamos la tarea como fija en el lienzo para que salga del Dock
+    // Sacamos la tarea del Dock para activar el flujo cascada de respaldo
     setSpheres(prev => prev.map(s => 
-      s.id === task.id ? { ...s, is_in_canvas: true, grid_cell_index: closestCellIndex } : s
+      s.id === task.id ? { ...s, is_in_canvas: true, grid_cell_index: gridIndex } : s
     ));
-
-    // Aquí dispararemos el UPDATE silencioso a Supabase en el siguiente paso
-  } else {
-    // RECHAZO: No se soltó cerca o la celda ya está ocupada.
-    // Framer Motion regresará la bolita automáticamente si el componente se mantiene en su sitio,
-    // pero como el Dock filtra de inmediato, el comportamiento por defecto es limpio.
   }
+  // Si se suelta fuera de la zona válida, Framer Motion regresa la bolita al Dock automáticamente
 };
 
   return (
     <div className="h-screen w-full bg-capill-paper flex flex-col items-center justify-center overflow-hidden font-sans select-none relative">
       
       {/* RETÍCULA SUIZA 3X3 DELIMITADA EN LA ZONA SEGURA CENTRAL */}
+      {/* RETÍCULA SUIZA 3X3 DELIMITADA Y CONTENEDOR DE ACUARELAS */}
       <div 
         ref={canvasRef} 
         className="absolute top-32 bottom-32 left-10 right-10 z-0 pointer-events-none"
         style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(3, 1fr)', gap: '1px' }}
       >
         {[...Array(9)].map((_, i) => (
-          <div 
-            key={i}
-            ref={el => cellsRef.current[i] = el}
-            className="border border-black/[0.03] flex items-center justify-center text-black/[0.02] text-xs font-sans transition-colors duration-300"
-            style={{ backgroundColor: gridOccupancy[i] ? 'rgba(0,0,0,0.01)' : 'transparent' }}
-          >
-            {i + 1}
-          </div>
+          <div key={i} className="border border-black/[0.02] flex items-center justify-center text-black/[0.02] text-xs font-sans" />
         ))}
+
+        {/* CAPA DE CAPTURA VISUAL: Aquí flotan las acuarelas estampadas por el usuario */}
+        <div className="absolute inset-0 pointer-events-auto">
+          {canvasPolygons.map((poly) => (
+            <motion.div
+              key={`canvas-poly-${poly.id}`}
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 0.85 }}
+              style={{ 
+                position: 'absolute',
+                left: poly.x,
+                top: poly.y,
+                backgroundColor: poly.color,
+                ...getShapeStyle(poly.finalSets)
+              }}
+              className="w-14 h-14 shadow-2xl backdrop-blur-sm blur-[1.5px] mix-blend-multiply cursor-pointer group"
+            >
+              <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-capill-ink text-white text-[9px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl pointer-events-none z-30">
+                {poly.title}
+              </span>
+            </motion.div>
+          ))}
+        </div>
       </div>
 
       {/* HEADER COHESIVO CON BOTÓN FÍSICO */}
