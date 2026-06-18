@@ -56,7 +56,7 @@ function App() {
       ));
       handleBackToEther(); 
       setIsFinalizing(false);
-    }, 3000);
+    }, 1500);
   };
 
   const getShapeStyle = (sets) => {
@@ -499,7 +499,8 @@ function App() {
                     perspective: 1000
                   }}
 // CAMBIO: Añadida la clase 'mix-blend-difference' para invertir el color automáticamente
-                  className="absolute bottom-10 right-10 w-20 h-20 backdrop-blur-xl border border-white/40 flex items-center justify-center text-white font-bold cursor-pointer hover:bg-white/30 shadow-[0_0_30px_rgba(255,255,255,0.2)] mix-blend-difference z-30"                    >
+                  // CAMBIO: Cambiamos 'mix-blend-difference' por 'backdrop-invert-[80%]'
+className="absolute bottom-10 right-10 w-20 h-20 backdrop-blur-xl border border-white/40 flex items-center justify-center text-white font-bold cursor-pointer hover:bg-white/30 shadow-[0_0_30px_rgba(255,255,255,0.2)] backdrop-invert-[80%] z-30"> 
                   <span className="font-sans text-[10px] tracking-widest opacity-60">FIN</span>
                 </motion.button>
               )}
