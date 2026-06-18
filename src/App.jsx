@@ -73,6 +73,25 @@ const RARE_CMYK_MUTATIONS = [
     setSubtasks([{id: 1, text: '', completed: false}, {id: 2, text: '', completed: false}, {id: 3, text: '', completed: false}]);
   };
 
+  // Nueva función para congelar el progreso intermedio en la bolita antes de salir
+    const handleBackToEther = () => {
+      if (activeSphere) {
+        const newSpheres = spheres.map(s => 
+          s.id === activeSphere.id 
+            ? { ...s, subtasks, step, setsCompleted, isGuided, mode } 
+            : s
+        );
+        setSpheres(newSpheres);
+      }
+      // Limpieza de estados locales para que la siguiente bolita entre limpia
+      setActiveSphere(null);
+      setStep(1);
+      setMode('input');
+      setSetsCompleted(0);
+      setIsGuided(true);
+      setSubtasks([{id: 1, text: '', completed: false}, {id: 2, text: '', completed: false}, {id: 3, text: '', completed: false}]);
+    };
+
   const placeholders = [
     "levantarse", 
     "encender la PC", 
@@ -216,8 +235,21 @@ const RARE_CMYK_MUTATIONS = [
               whileHover={s.is_finalized ? { scale: 1.08 } : { y: -10, scale: 1.1 }}
               
               // COMPORTAMIENTO CONDICIONAL: Solo abre el menú si no está finalizada
+              /* Reemplaza el onClick actual de tu Dock por este inteligente */
               onClick={() => {
-                if (!s.is_finalized) setActiveSphere(s);
+                if (!s.is_finalized) {
+                  setActiveSphere(s);
+                  // Restauración de memoria temporal si el usuario ya había avanzado antes
+                  setStep(s.step || 1);
+                  setSetsCompleted(s.setsCompleted || 0);
+                  setIsGuided(s.isGuided !== undefined ? s.isGuided : true);
+                  setMode(s.mode || 'input');
+                  setSubtasks(s.subtasks && s.subtasks.length > 0 ? s.subtasks : [
+                    { id: 1, text: '', completed: false },
+                    { id: 2, text: '', completed: false },
+                    { id: 3, text: '', completed: false }
+                  ]);
+                }
               }}
 
               // MECÁNICA FASE 2: Habilitar arrastre libre por la pantalla solo si está finalizada
@@ -254,27 +286,17 @@ const RARE_CMYK_MUTATIONS = [
           <motion.div
             layoutId={`sphere-container-${activeSphere.id}`}
             transition={{ type: "spring", stiffness: 120, damping: 20 }}
-           style={{ backgroundColor: setsCompleted > 0 ? 'transparent' : activeSphere.color }}
+            
+            // SOLUCIÓN FONDO FANTASMA: Cambiamos 'transparent' por '#000000'. El shader se mezclará encima sin dejar ver el fondo.
+            style={{ backgroundColor: setsCompleted > 0 ? '#000000' : activeSphere.color }}
+            
             className={`fixed inset-0 w-full h-full z-50 flex flex-col items-center justify-center p-6 overflow-hidden transition-colors duration-300 ${
               activeSphere.phase === 'noche' ? 'text-white' : 'text-capill-ink'
             }`}
           >
-            {/* Inyección del Motor Fluido 3D en el instante del primer set */}
-          <AnimatePresence>
-            {setsCompleted > 0 && (
-              <motion.div 
-                initial={{ opacity: 0 }} 
-                animate={{ opacity: 1 }} 
-                exit={{ opacity: 0 }} 
-                transition={{ duration: 1.5 }}
-                className="absolute inset-0 z-0"
-              >
-                <FluidBackground baseColor={activeSphere.color} />
-              </motion.div>
-            )}
-          </AnimatePresence>
+            {/* SOLUCIÓN AMNESIA: Ahora llama a handleBackToEther para guardar antes de salir */}
             <button 
-              onClick={resetImmersive}
+              onClick={handleBackToEther}
               className="absolute top-10 left-10 text-xs tracking-widest uppercase opacity-40 hover:opacity-100 transition-opacity cursor-pointer font-sans"
             >
               ← Volver al éter
