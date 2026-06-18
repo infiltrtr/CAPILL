@@ -132,7 +132,8 @@ function App() {
     if (Math.random() < 0.15) { 
       randomColor = RARE_CMYK_MUTATIONS[Math.floor(Math.random() * RARE_CMYK_MUTATIONS.length)];
     } else {
-      currentPhase.colors[Math.floor(Math.random() * currentPhase.colors.length)];
+      // CORREGIDO: Ahora sí asignamos el color correctamente a la variable
+      randomColor = currentPhase.colors[Math.floor(Math.random() * currentPhase.colors.length)];
     }
 
     const newTask = {
@@ -148,11 +149,7 @@ function App() {
     
     if (!error && data) {
       const localTask = { ...data[0], is_in_canvas: false };
-      
-      // CAMBIO CLAVE: Cambiamos [localTask, ...prev] por [...prev, localTask]
-      // Esto manda la nueva certeza al final de la fila (al respaldo invisible)
       setSpheres((prev) => [...prev, localTask]);
-      
       setInputValue("");
       setIsInputVisible(false); 
     } else if (error) {
