@@ -87,8 +87,9 @@ function ShaderMesh({ polygons }) {
 
     polygons.forEach((poly, index) => {
       if (index < 20) {
-        // Blindaje contra posiciones corruptas
-        positions[index].set(poly.x + 28, poly.y + 28);
+        // CORRECCIÓN MATEMÁTICA: Sumamos los márgenes de Tailwind para centrar en pantalla completa
+        // left-10 = 40px | top-32 = 128px | Centro de la bolita = 28px
+        positions[index].set(poly.x + 40 + 28, poly.y + 128 + 28);
         colors[index].set(poly.color || '#E5E7EB');
         shapes[index] = poly.finalSets || 1;
       }
@@ -131,7 +132,7 @@ function ShaderMesh({ polygons }) {
           }
         `}
         uniforms={uniforms}
-        glslVersion={THREE.GLSL3}
+        // CORRECCIÓN DE MOTOR: Eliminamos glslVersion para permitir la compatibilidad con GLSL1
       />
     </mesh>
   );
