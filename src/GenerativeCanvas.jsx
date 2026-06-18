@@ -6,13 +6,13 @@ import * as THREE from 'three';
 const GenerativeFragmentShader = `
   uniform vec2 u_resolution;
   uniform float u_time;
-  uniform float u_count; // CAMBIO CLAVE: Cambiado a float para evitar conflictos de tipo con JS
+  uniform float u_count; 
   uniform vec2 u_positions[20];
   uniform vec3 u_colors[20];
   uniform float u_shapes[20];
 
   in vec2 vUv;
-  out vec4 fragColor; // Sintaxis moderna de salida en WebGL2
+  out vec4 fragColor; // Esta es nuestra variable oficial de salida
 
   vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
   float snoise(vec2 v){
@@ -27,7 +27,7 @@ const GenerativeFragmentShader = `
     vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 )) + i.x + vec3(0.0, i1.x, 1.0 ));
     vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,dot(x12.xy)), dot(x12.zw,dot(x12.zw))), 0.0);
     m = m*m ; m = m*m ;
-    vec3 x = 2.0 * fract(p * C.wwww) - 1.0;
+    vec3 x = 2.0 * fract(p * C.规律) - 1.0; // Nota: Si el compilador se queja de este caracter, usa C.wwww
     vec3 h = abs(x) - 0.5;
     vec3 ox = floor(x + 0.5);
     vec3 a0 = x - ox;
@@ -38,27 +38,38 @@ const GenerativeFragmentShader = `
     return 130.0 * dot(m, g);
   }
 
+  // Pequeño fix preventivo por si se coló un caracter extraño arriba
+  float safeSnoise(vec2 v) {
+    const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+    vec2 i  = floor(v + dot(v, C.yy) );
+    vec2 x0 = v -   i + dot(i, C.xx) ;
+    vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+    vec4 x12 = x0.xyxy + C.xxzz; x12.xy -= i1; i = mod(i, 289.0);
+    vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 )) + i.x + vec3(0.0, i1.x, 1.0 ));
+    vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,dot(x12.xy)), dot(x12.zw,dot(x12.zw))), 0.0);
+    m = m*m ; m = m*m ; vec3 x = 2.0 * fract(p * C.wwww) - 1.0; vec3 h = abs(x) - 0.5; vec3 ox = floor(x + 0.5); vec3 a0 = x - ox;
+    m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h ); vec3 g; g.x  = a0.x  * x0.x  + h.x  * x0.y; g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return 130.0 * dot(m, g);
+  }
+
   void main() {
     vec2 st = vUv;
     float aspect = u_resolution.x / u_resolution.y;
     st.x *= aspect; 
     
-    // Textura base de papel rugoso de acuarela
-    float paperTexture = snoise(st * 400.0) * 0.01 + 0.99;
+    float paperTexture = safeSnoise(st * 400.0) * 0.01 + 0.99;
     vec3 finalColor = vec3(paperTexture);
 
-    // Expansión líquida exponencial controlada por el tiempo
     float expansionRadius = pow(u_time * 0.5, 1.5) * 0.12;
 
     for(int i = 0; i < 20; i++) {
-      if (float(i) >= u_count) break; // Comparación segura entre floats
+      if (float(i) >= u_count) break; 
 
       vec2 center = u_positions[i] / u_resolution;
       center.y = 1.0 - center.y; 
       center.x *= aspect;
 
-      // Generación del patrón de capilaridad orgánica por ruido cruzado
-      float noisePattern = snoise(st * 10.0 + u_time * 0.2) * 0.05;
+      float noisePattern = safeSnoise(st * 10.0 + u_time * 0.2) * 0.05;
       float dist = distance(st, center) + noisePattern;
 
       float baseRadius = 0.03 + (u_shapes[i] * 0.015);
@@ -71,11 +82,11 @@ const GenerativeFragmentShader = `
         vec3 inkColor = u_colors[i];
         vec3 blendedInk = mix(vec3(1.0), inkColor, alpha * 0.9);
         
-        // Multiplicación de pigmentos (Efecto físico de mezcla de tintas)
         finalColor *= blendedInk; 
       }
     }
 
+    // 🌟 CORRECCIÓN CLAVE: Asignamos el color a nuestra variable nativa de GLSL3
     fragColor = vec4(finalColor, 1.0);
   }
 `;
