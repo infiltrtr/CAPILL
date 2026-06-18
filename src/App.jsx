@@ -2,19 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from './supabaseClient';
 import { PHASES } from './constants';
-import FluidBackground from './FluidBackground';
+import FluidBackground from './FluidBackground'; // <-- Importación garantizada
 
-function App() {
-
-  // Paleta de Mutación: Colores raros fuera del espectro horario tradicional, 100% CMYK-Safe
+// Paleta de Mutación: Colores raros fuera del espectro horario tradicional, 100% CMYK-Safe
 const RARE_CMYK_MUTATIONS = [
-  "#A9DFBF", // Verde Salvia / Menta Vintage (C:30, M:0, Y:35, K:0)
-  "#F9E79F", // Amarillo Ocre Pastel / Vainilla (C:0, M:5, Y:40, K:0)
-  "#F5B041", // Naranja Melocotón / Terracota Suave (C:0, M:35, Y:75, K:0)
-  "#A2D9CE", // Verde Azulado Deslavado / Teal Muted (C:35, M:0, Y:20, K:0)
-  "#EDBB99"  // Rosa Viejo / Salmón Journaling (C:0, M:25, Y:35, K:5)
+  "#A9DFBF", // Verde Salvia / Menta Vintage
+  "#F9E79F", // Amarillo Ocre Pastel / Vainilla
+  "#F5B041", // Naranja Melocotón / Terracota Suave
+  "#A2D9CE", // Verde Azulado Deslavado
+  "#EDBB99"  // Rosa Viejo / Salmón Journaling
 ];
 
+function App() {
   const [inputValue, setInputValue] = useState("");
   const [spheres, setSpheres] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,27 +33,24 @@ const RARE_CMYK_MUTATIONS = [
   const [setsCompleted, setSetsCompleted] = useState(0);
   const [isGuided, setIsGuided] = useState(true);
 
+  // Sincronización segura de estados intermedios
   const updateSphereData = (updatedSubtasks) => {
-    const newSpheres = spheres.map(s => 
-      s.id === activeSphere.id ? { ...s, subtasks: updatedSubtasks, step, setsCompleted, isGuided } : s
-    );
-    setSpheres(newSpheres);
+    setSpheres(prev => prev.map(s => 
+      s.id === activeSphere.id ? { ...s, subtasks: updatedSubtasks, step, setsCompleted, isGuided, mode } : s
+    ));
   };
 
   const handleFinalize = () => {
-  setIsFinalizing(true); // Activa el efecto shaky por 3s
-  setTimeout(() => {
-    // Guardamos la finalización Y retenemos el número de sets logrados para la geometría
-    const newSpheres = spheres.map(s => 
-      s.id === activeSphere.id ? { ...s, is_finalized: true, finalSets: setsCompleted } : s
-    );
-    setSpheres(newSpheres);
-    resetImmersive();
-    setIsFinalizing(false);
-  }, 1500);
-};
+    setIsFinalizing(true);
+    setTimeout(() => {
+      setSpheres(prev => prev.map(s => 
+        s.id === activeSphere.id ? { ...s, is_finalized: true, finalSets: setsCompleted } : s
+      ));
+      handleBackToEther(); // Salida limpia
+      setIsFinalizing(false);
+    }, 3000);
+  };
 
-  // Función para obtener el polígono CSS según los sets completados
   const getShapeStyle = (sets) => {
     if (sets <= 2) return { borderRadius: '50%' }; 
     if (sets === 3) return { clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)', borderRadius: '0' }; 
@@ -64,7 +60,14 @@ const RARE_CMYK_MUTATIONS = [
     return { clipPath: 'polygon(50% 0%, 90% 20%, 100% 60%, 75% 100%, 25% 100%, 0% 60%, 10% 20%)', borderRadius: '0' }; 
   };
 
-  const resetImmersive = () => {
+  const handleBackToEther = () => {
+    if (activeSphere) {
+      setSpheres(prev => prev.map(s => 
+        s.id === activeSphere.id 
+          ? { ...s, subtasks, step, setsCompleted, isGuided, mode } 
+          : s
+      ));
+    }
     setActiveSphere(null);
     setStep(1);
     setMode('input');
@@ -73,32 +76,7 @@ const RARE_CMYK_MUTATIONS = [
     setSubtasks([{id: 1, text: '', completed: false}, {id: 2, text: '', completed: false}, {id: 3, text: '', completed: false}]);
   };
 
-  // Nueva función para congelar el progreso intermedio en la bolita antes de salir
-    const handleBackToEther = () => {
-      if (activeSphere) {
-        const newSpheres = spheres.map(s => 
-          s.id === activeSphere.id 
-            ? { ...s, subtasks, step, setsCompleted, isGuided, mode } 
-            : s
-        );
-        setSpheres(newSpheres);
-      }
-      // Limpieza de estados locales para que la siguiente bolita entre limpia
-      setActiveSphere(null);
-      setStep(1);
-      setMode('input');
-      setSetsCompleted(0);
-      setIsGuided(true);
-      setSubtasks([{id: 1, text: '', completed: false}, {id: 2, text: '', completed: false}, {id: 3, text: '', completed: false}]);
-    };
-
-  const placeholders = [
-    "levantarse", 
-    "encender la PC", 
-    "agarrar la libreta", 
-    "abrir el editor", 
-    "servirse agua"
-  ];
+  const placeholders = ["levantarse", "encender la PC", "agarrar la libreta", "abrir el editor", "servirse agua"];
 
   useEffect(() => {
     if (activeSphere && step === 1) {
@@ -115,30 +93,21 @@ const RARE_CMYK_MUTATIONS = [
 
       if (!user) {
         const { data, error } = await supabase.auth.signInAnonymously();
-        if (error) {
-          console.error("Error al crear sesión anónima:", error.message);
-          return;
-        }
+        if (error) return;
         user = data.user;
       }
 
-      const fetchSpheres = async () => {
+      if (user) {
         const { data, error } = await supabase
           .from('tasks')
           .select('*')
           .eq('is_completed', false)
           .order('created_at', { ascending: false })
           .limit(5); 
-        
-        if (!error) setSpheres(data);
-      };
-
-      if (user) {
-        fetchSpheres();
+        if (!error && data) setSpheres(data);
       }
       setLoading(false);
     };
-
     initializeSession();
   }, []);
 
@@ -150,46 +119,33 @@ const RARE_CMYK_MUTATIONS = [
   };
 
   const handleCreateSphere = async (e) => {
-  if (e.key === 'Enter' && inputValue.trim() !== "") {
-    const currentPhase = getPhaseConfig();
-    const { data: { user } } = await supabase.auth.getUser();
+    if (e.key === 'Enter' && inputValue.trim() !== "") {
+      const currentPhase = getPhaseConfig();
+      const { data: { user } } = await supabase.auth.getUser();
 
-    // --- ALGORITMO DE MUTACIÓN DE COLOR CMYK-SAFE ---
-    let randomColor;
-    const MUTATION_CHANCE = 0.15; // 15% de probabilidad de conseguir un color raro
+      let randomColor;
+      if (Math.random() < 0.15) { // 15% Probabilidad Mutación CMYK
+        randomColor = RARE_CMYK_MUTATIONS[Math.floor(Math.random() * RARE_CMYK_MUTATIONS.length)];
+      } else {
+        randomColor = currentPhase.colors[Math.floor(Math.random() * currentPhase.colors.length)];
+      }
 
-    if (Math.random() < MUTATION_CHANCE) {
-      // Éxito: El usuario extrajo un color fuera del espectro horario actual
-      const randomIndex = Math.floor(Math.random() * RARE_CMYK_MUTATIONS.length);
-      randomColor = RARE_CMYK_MUTATIONS[randomIndex];
-    } else {
-      // Flujo normal: Color extraído de la fase del día (mañana, tarde o noche)
-      randomColor = currentPhase.colors[Math.floor(Math.random() * currentPhase.colors.length)];
+      const newTask = {
+        title: inputValue,
+        color: randomColor,
+        type: 'normal',
+        phase: currentPhase.name,
+        is_completed: false,
+        user_id: user.id 
+      };
+
+      const { data, error } = await supabase.from('tasks').insert([newTask]).select();
+      if (!error && data) {
+        setSpheres((prev) => [data[0], ...prev].slice(0, 5));
+        setInputValue("");
+      }
     }
-    // -------------------------------------------------
-
-    const newTask = {
-      title: inputValue,
-      color: randomColor,
-      type: 'normal',
-      phase: currentPhase.name,
-      is_completed: false,
-      user_id: user.id 
-    };
-
-    const { data, error } = await supabase
-      .from('tasks')
-      .insert([newTask])
-      .select();
-
-    if (!error && data) {
-      setSpheres((prev) => [data[0], ...prev].slice(0, 5));
-      setInputValue("");
-    } else if (error) {
-      console.error("Error al guardar:", error.message);
-    }
-  }
-};
+  };
 
   if (loading) {
     return (
@@ -219,9 +175,8 @@ const RARE_CMYK_MUTATIONS = [
         />
       </div>
 
-      
-      {/* DOCK DE BOLITAS EVOLUTIVO Y ARRASTRABLE */}
-      <div className="absolute bottom-10 flex gap-5 p-6 bg-white/20 backdrop-blur-xl rounded-full border border-white/40 shadow-lg">
+      {/* DOCK DE BOLITAS EVOLUTIVOS Y ARRASTRABLES */}
+      <div className="absolute bottom-10 flex gap-5 p-6 bg-white/20 backdrop-blur-xl rounded-full border border-white/40 shadow-lg z-20">
         <AnimatePresence mode="popLayout">
           {spheres.map((s) => (
             <motion.div
@@ -231,15 +186,10 @@ const RARE_CMYK_MUTATIONS = [
               initial={{ scale: 0, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0, opacity: 0 }}
-              // Si ya está finalizada, eliminamos el brinco vertical para no interferir con el arrastre
               whileHover={s.is_finalized ? { scale: 1.08 } : { y: -10, scale: 1.1 }}
-              
-              // COMPORTAMIENTO CONDICIONAL: Solo abre el menú si no está finalizada
-              /* Reemplaza el onClick actual de tu Dock por este inteligente */
               onClick={() => {
                 if (!s.is_finalized) {
                   setActiveSphere(s);
-                  // Restauración de memoria temporal si el usuario ya había avanzado antes
                   setStep(s.step || 1);
                   setSetsCompleted(s.setsCompleted || 0);
                   setIsGuided(s.isGuided !== undefined ? s.isGuided : true);
@@ -251,29 +201,21 @@ const RARE_CMYK_MUTATIONS = [
                   ]);
                 }
               }}
-
-              // MECÁNICA FASE 2: Habilitar arrastre libre por la pantalla solo si está finalizada
               drag={s.is_finalized}
               dragElastic={0.1}
-              // Límites aproximados para que el usuario pueda subir la figura al lienzo libremente
               dragConstraints={{ top: -800, left: -600, right: 600, bottom: 100 }} 
-              
               style={{ 
                 backgroundColor: s.color,
-                // Si está finalizada, adopta la geometría del polígono ganado, si no, se queda como círculo (borderRadius 50%)
                 ...(s.is_finalized ? getShapeStyle(s.finalSets || 3) : { borderRadius: '50%' })
               }}
-              
-              // ESTÉTICA SUIZA / ACUARELA: Mix-blend-multiply + blur suave simulan la fusión CMYK al encimarse
-              className={`w-14 h-14 border border-white/30 relative group transition-colors duration-300 ${
+              className={`w-14 h-14 border border-white/30 relative group ${
                 s.is_finalized 
                   ? 'cursor-grab active:cursor-grabbing shadow-2xl backdrop-blur-sm blur-[1.5px] mix-blend-multiply opacity-85' 
                   : 'cursor-pointer'
               }`}
             >
-              {/* Etiqueta flotante con indicador de arrastre */}
               <span className="absolute -top-12 left-1/2 -translate-x-1/2 bg-capill-ink text-white text-[10px] px-3 py-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl pointer-events-none z-30">
-                {s.title} {s.is_finalized && " ── ¡Arrástrame al lienzo!"}
+                {s.title} {s.is_finalized && " ── ¡Arrástrame!"}
               </span>
             </motion.div>
           ))}
@@ -286,24 +228,21 @@ const RARE_CMYK_MUTATIONS = [
           <motion.div
             layoutId={`sphere-container-${activeSphere.id}`}
             transition={{ type: "spring", stiffness: 120, damping: 20 }}
-            
-            // SOLUCIÓN FONDO FANTASMA: Cambiamos 'transparent' por '#000000'. El shader se mezclará encima sin dejar ver el fondo.
             style={{ backgroundColor: setsCompleted > 0 ? '#000000' : activeSphere.color }}
-            
-            className={`fixed inset-0 w-full h-full z-50 flex flex-col items-center justify-center p-6 overflow-hidden transition-colors duration-300 ${
-              activeSphere.phase === 'noche' ? 'text-white' : 'text-capill-ink'
-            }`}
+            className="fixed inset-0 w-full h-full z-50 flex flex-col items-center justify-center p-6 overflow-hidden transition-colors duration-300 text-white"
           >
-            {/* SOLUCIÓN AMNESIA: Ahora llama a handleBackToEther para guardar antes de salir */}
+            {/* EL SHADER ANCLADO DEBAJO (Solo aparece si se completa mínimo 1 set) */}
+            {setsCompleted > 0 && <FluidBackground baseColor={activeSphere.color} />}
+
             <button 
               onClick={handleBackToEther}
-              className="absolute top-10 left-10 text-xs tracking-widest uppercase opacity-40 hover:opacity-100 transition-opacity cursor-pointer font-sans"
+              className="absolute top-10 left-10 text-xs tracking-widest uppercase opacity-40 hover:opacity-100 transition-opacity cursor-pointer font-sans z-10"
             >
               ← Volver al éter
             </button>
 
             {mode === 'input' && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center w-full flex flex-col items-center">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center w-full flex flex-col items-center z-10">
                 <h2 className="text-xs uppercase tracking-widest opacity-40 font-sans font-bold mb-2">Objetivo actual</h2>
                 <h1 className="text-4xl font-light tracking-tight max-w-2xl mb-12">{activeSphere.title}</h1>
               </motion.div>
@@ -315,9 +254,7 @@ const RARE_CMYK_MUTATIONS = [
                   initial={{ scale: 0.9, opacity: 0 }} 
                   animate={{ scale: 1, opacity: 1 }} 
                   exit={{ scale: 0.9, opacity: 0 }}
-                  className={`w-full max-w-xl backdrop-blur-2xl rounded-2xl p-8 border shadow-2xl flex flex-col items-center transition-colors ${
-                    activeSphere.phase === 'noche' ? 'bg-white/5 border-white/10 shadow-black/40' : 'bg-white/10 border-white/20 shadow-xl'
-                  }`}
+                  className="w-full max-w-xl backdrop-blur-2xl rounded-2xl p-8 border shadow-2xl flex flex-col items-center bg-white/5 border-white/10 shadow-black/40 z-10"
                 >
                   <div className="w-full text-center mb-6">
                     <p className="text-xl font-medium mb-2">
@@ -338,6 +275,7 @@ const RARE_CMYK_MUTATIONS = [
                         const newTasks = [...subtasks];
                         newTasks[step - 1].text = e.target.value;
                         setSubtasks(newTasks);
+                        updateSphereData(newTasks);
 
                         if (step < 3) {
                           setStep(prev => prev + 1);
@@ -348,9 +286,7 @@ const RARE_CMYK_MUTATIONS = [
                         }
                       }
                     }}
-                    className={`w-full bg-transparent text-center text-lg outline-none py-2 transition-colors font-sans font-light border-b ${
-                      activeSphere.phase === 'noche' ? 'border-white/20 focus:border-white/60 text-white' : 'border-capill-ink/20 focus:border-capill-ink/50 text-capill-ink'
-                    }`}
+                    className="w-full bg-transparent text-center text-lg outline-none py-2 font-sans font-light border-b border-white/20 focus:border-white/60 text-white"
                   />
                 </motion.div>
               )}
@@ -374,16 +310,9 @@ const RARE_CMYK_MUTATIONS = [
                         rotateY: task.completed ? 360 : 0, 
                         scale: mode === 'merging' ? 0 : (mode === 'validating' ? 1.5 : (isCurrentOrPast ? 1.1 : 1)),
                       }}
-                      key={`circle-${index}`}
-                        layout
-                        animate={{ 
-                          rotateY: task.completed ? 360 : 0, 
-                          scale: mode === 'merging' ? 0 : (mode === 'validating' ? 1.5 : (isCurrentOrPast ? 1.1 : 1)),
-                        }}
-                        // CAMBIO CLAVE: Reactividad sutil al hacer hover durante la validación
-                        whileHover={mode === 'validating' && !task.completed ? { scale: 1.6, y: -5 } : {}}
-                        style={{ perspective: 1000 }} 
-                        onClick={() => {
+                      whileHover={mode === 'validating' && !task.completed ? { scale: 1.6, y: -5 } : {}}
+                      style={{ perspective: 1000 }} 
+                      onClick={() => {
                         if (mode === 'validating') {
                           const newTasks = [...subtasks];
                           newTasks[index].completed = !newTasks[index].completed;
@@ -419,12 +348,18 @@ const RARE_CMYK_MUTATIONS = [
                     exit={{ opacity: 0, y: -10, scale: 0.9 }}
                     onClick={() => {
                       setMode('merging');
+                      const nextSets = setsCompleted + 1;
+                      setSetsCompleted(nextSets);
                       setTimeout(() => {
-                        setSetsCompleted(prev => prev + 1);
                         setMode('input');
                         setIsGuided(false);
                         setStep(1);
-                        setSubtasks([{id: 1, text: '', completed: false}, {id: 2, text: '', completed: false}, {id: 3, text: '', completed: false}]);
+                        const resetTasks = [{id: 1, text: '', completed: false}, {id: 2, text: '', completed: false}, {id: 3, text: '', completed: false}];
+                        setSubtasks(resetTasks);
+                        // Forzar guardado inmediato en el arreglo para que el background lo lea sin delay
+                        setSpheres(prev => prev.map(s => 
+                          s.id === activeSphere.id ? { ...s, subtasks: resetTasks, step: 1, setsCompleted: nextSets, isGuided: false, mode: 'input' } : s
+                        ));
                       }, 600);
                     }}
                     className="mt-12 px-8 py-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl text-xs font-sans tracking-widest uppercase text-white hover:bg-white/20 transition-all cursor-pointer shadow-xl hover:scale-105 active:scale-95"
@@ -436,34 +371,32 @@ const RARE_CMYK_MUTATIONS = [
             </motion.div>
 
             <AnimatePresence>
-            {setsCompleted > 0 && (
-              <motion.button
-                key={`fin-btn-${setsCompleted}`} // <-- CAMBIO CLAVE: Esto fuerza a que el spin se repita por cada set nuevo
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{ 
-                  rotate: [0, 360], 
-                  x: isFinalizing ? [-2, 2, -2, 2, -1, 1, 0] : 0, 
-                  scale: isFinalizing ? 1.2 : [1, 1.3, 1], // Animación Bouncy restaurada
-                  opacity: 1
-                }}
-                transition={{ 
-                  rotate: { duration: 0.8, ease: "easeInOut" },
-                  scale: { type: "spring", stiffness: 250, damping: 15 },
-                  x: { repeat: isFinalizing ? Infinity : 0, duration: 0.1 }
-                }}
-                onClick={handleFinalize}
-                disabled={isFinalizing}
-                style={{ 
-                  ...getShapeStyle(setsCompleted), 
-                  backgroundColor: 'rgba(255,255,255,0.15)',
-                  perspective: 1000
-                }}
-                className="absolute bottom-10 right-10 w-20 h-20 backdrop-blur-xl border border-white/40 flex items-center justify-center text-white font-bold cursor-pointer hover:bg-white/30 shadow-[0_0_30px_rgba(255,255,255,0.2)] z-30"
-              >
-                <span className="font-sans text-[10px] tracking-widest opacity-60">FIN</span>
-              </motion.button>
-            )}
-          </AnimatePresence>
+              {setsCompleted > 0 && (
+                <motion.button
+                  key={`fin-btn-${setsCompleted}`}
+                  animate={{ 
+                    rotate: [0, 360], 
+                    x: isFinalizing ? [-2, 2, -2, 2, -1, 1, 0] : 0, 
+                    scale: isFinalizing ? 1.2 : [1, 1.3, 1]
+                  }}
+                  transition={{ 
+                    rotate: { duration: 0.8, ease: "easeInOut" },
+                    scale: { type: "spring", stiffness: 250, damping: 15 },
+                    x: { repeat: isFinalizing ? Infinity : 0, duration: 0.1 }
+                  }}
+                  onClick={handleFinalize}
+                  disabled={isFinalizing}
+                  style={{ 
+                    ...getShapeStyle(setsCompleted), 
+                    backgroundColor: 'rgba(255,255,255,0.15)',
+                    perspective: 1000
+                  }}
+                  className="absolute bottom-10 right-10 w-20 h-20 backdrop-blur-xl border border-white/40 flex items-center justify-center text-white font-bold cursor-pointer hover:bg-white/30 shadow-[0_0_30px_rgba(255,255,255,0.2)] z-30"
+                >
+                  <span className="font-sans text-[10px] tracking-widest opacity-60">FIN</span>
+                </motion.button>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>
