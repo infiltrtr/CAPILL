@@ -2,15 +2,17 @@ import React, { useMemo, useRef, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
+// 1. SHADER DE FRAGMENTOS (Actualizado a GLSL 3.00 ES con Tipado Seguro)
 const GenerativeFragmentShader = `
   uniform vec2 u_resolution;
   uniform float u_time;
-  uniform int u_count;
+  uniform float u_count; // CAMBIO CLAVE: Cambiado a float para evitar conflictos de tipo con JS
   uniform vec2 u_positions[20];
   uniform vec3 u_colors[20];
   uniform float u_shapes[20];
 
-  varying vec2 vUv;
+  in vec2 vUv;
+  out vec4 fragColor; // Sintaxis moderna de salida en WebGL2
 
   vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
   float snoise(vec2 v){
@@ -37,24 +39,25 @@ const GenerativeFragmentShader = `
   }
 
   void main() {
-    // FIX: Usamos vUv para ignorar el Device Pixel Ratio de la pantalla
     vec2 st = vUv;
     float aspect = u_resolution.x / u_resolution.y;
-    st.x *= aspect; // Mantenemos las proporciones redondas
+    st.x *= aspect; 
     
-    // Textura base de papel (Blanco puro/crema)
+    // Textura base de papel rugoso de acuarela
     float paperTexture = snoise(st * 400.0) * 0.01 + 0.99;
     vec3 finalColor = vec3(paperTexture);
 
+    // Expansión líquida exponencial controlada por el tiempo
     float expansionRadius = pow(u_time * 0.5, 1.5) * 0.12;
 
     for(int i = 0; i < 20; i++) {
-      if (i >= u_count) break;
+      if (float(i) >= u_count) break; // Comparación segura entre floats
 
       vec2 center = u_positions[i] / u_resolution;
-      center.y = 1.0 - center.y; // Invertir el eje Y para alinear HTML con WebGL
+      center.y = 1.0 - center.y; 
       center.x *= aspect;
 
+      // Generación del patrón de capilaridad orgánica por ruido cruzado
       float noisePattern = snoise(st * 10.0 + u_time * 0.2) * 0.05;
       float dist = distance(st, center) + noisePattern;
 
@@ -67,12 +70,13 @@ const GenerativeFragmentShader = `
         
         vec3 inkColor = u_colors[i];
         vec3 blendedInk = mix(vec3(1.0), inkColor, alpha * 0.9);
+        
+        // Multiplicación de pigmentos (Efecto físico de mezcla de tintas)
         finalColor *= blendedInk; 
       }
     }
 
-    // Aseguramos que el alpha sea 1.0 (sólido)
-    gl_FragColor = vec4(finalColor, 1.0);
+    fragColor = vec4(finalColor, 1.0);
   }
 `;
 
@@ -87,8 +91,6 @@ function ShaderMesh({ polygons }) {
 
     polygons.forEach((poly, index) => {
       if (index < 20) {
-        // CORRECCIÓN MATEMÁTICA: Sumamos los márgenes de Tailwind para centrar en pantalla completa
-        // left-10 = 40px | top-32 = 128px | Centro de la bolita = 28px
         positions[index].set(poly.x + 40 + 28, poly.y + 128 + 28);
         colors[index].set(poly.color || '#E5E7EB');
         shapes[index] = poly.finalSets || 1;
@@ -98,17 +100,18 @@ function ShaderMesh({ polygons }) {
     return {
       u_resolution: { value: new THREE.Vector2(size.width, size.height) },
       u_time: { value: 0 },
-      u_count: { value: polygons.length },
+      u_count: { value: parseFloat(polygons.length) }, // Forzamos float explícito
       u_positions: { value: positions },
       u_colors: { value: colors },
       u_shapes: { value: shapes }
     };
   }, [polygons, size]);
 
-  useFrame((state) => {
+  // FIX CRÍTICO: Usamos 'delta' para que la animación siempre inicie desde 0.0s en cada montura
+  useFrame((state, delta) => {
     if (meshRef.current) {
       if (meshRef.current.material.uniforms.u_time.value < 5.0) {
-        meshRef.current.material.uniforms.u_time.value = state.clock.getElapsedTime();
+        meshRef.current.material.uniforms.u_time.value += delta;
       }
     }
   });
@@ -125,14 +128,16 @@ function ShaderMesh({ polygons }) {
       <shaderMaterial
         fragmentShader={GenerativeFragmentShader}
         vertexShader={`
-          varying vec2 vUv;
+          in vec3 position;
+          in vec2 uv;
+          out vec2 vUv;
           void main() {
             vUv = uv;
             gl_Position = vec4(position, 1.0);
           }
         `}
         uniforms={uniforms}
-        // CORRECCIÓN DE MOTOR: Eliminamos glslVersion para permitir la compatibilidad con GLSL1
+        glslVersion={THREE.GLSL3} // Activamos explícitamente el compilador moderno GLSL 3.00 ES
       />
     </mesh>
   );
@@ -141,30 +146,22 @@ function ShaderMesh({ polygons }) {
 export default function GenerativeCanvas({ polygons, onBack }) {
   const canvasRef = useRef();
 
-  // EXPORTACIÓN CON BORDE DE IMPRESIÓN SUIZO
   const handleExportImage = () => {
     if (!canvasRef.current) return;
     
     const glCanvas = canvasRef.current;
-    
-    // 1. Creamos un canvas virtual de alta resolución
     const exportCanvas = document.createElement('canvas');
     const ctx = exportCanvas.getContext('2d');
 
-    // 2. Definimos el margen (Bleed) de 80px
     const bleed = 80; 
     exportCanvas.width = glCanvas.width + (bleed * 2);
     exportCanvas.height = glCanvas.height + (bleed * 2);
 
-    // 3. Pintamos el fondo blanco puro con el marco
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
-
-    // 4. Estampamos la simulación líquida justo en el centro
     ctx.drawImage(glCanvas, bleed, bleed);
 
-    // 5. Descarga de alta fidelidad
-    const dataURL = exportCanvas.toDataURL("image/png", 1.0);
+    const dataURL = exportCanvas.toToDataURL ? exportCanvas.toDataURL("image/png", 1.0) : exportCanvas.toDataURL("image/png");
     const link = document.createElement("a");
     link.download = `CAPILL_Impresion_${new Date().toISOString().slice(0,10)}.png`;
     link.href = dataURL;
@@ -174,20 +171,16 @@ export default function GenerativeCanvas({ polygons, onBack }) {
   return (
     <div className="fixed inset-0 w-full h-full bg-white z-50 flex flex-col justify-between">
       <div className="absolute inset-0 w-full h-full">
-        {/* gl={{ preserveDrawingBuffer: true }} permite extraer los píxeles sin que salga negro */}
         <Canvas 
-  // CLAVE DE RENDIMIENTO: Limita la resolución interna (1x a 1.5x máximo)
-  // Evita que monitores 4K/Retina rendericen a resoluciones obscenas y maten los FPS
-  dpr={[1, 1.5]} 
-  
-  gl={{ preserveDrawingBuffer: true, antialias: true }} 
-  onCreated={({ gl }) => { 
-    canvasRef.current = gl.domElement; 
-    gl.setClearColor('#FFFFFF'); 
-  }}
->
-  <ShaderMesh polygons={polygons} />
-</Canvas>
+          dpr={[1, 1.5]} // Restricción balanceada para evitar sobrecalentamiento en pantallas Retina/4K
+          gl={{ preserveDrawingBuffer: true, antialias: true }} 
+          onCreated={({ gl }) => { 
+            canvasRef.current = gl.domElement; 
+            gl.setClearColor('#FFFFFF'); 
+          }}
+        >
+          <ShaderMesh polygons={polygons} />
+        </Canvas>
       </div>
 
       <div className="relative w-full p-8 flex justify-between items-center pointer-events-none z-50">
