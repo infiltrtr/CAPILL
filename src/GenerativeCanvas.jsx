@@ -91,6 +91,7 @@ function ShaderMesh({ polygons }) {
 
     polygons.forEach((poly, index) => {
       if (index < 20) {
+        // Posicionamiento alineado
         positions[index].set(poly.x + 40 + 28, poly.y + 128 + 28);
         colors[index].set(poly.color || '#E5E7EB');
         shapes[index] = poly.finalSets || 1;
@@ -100,14 +101,13 @@ function ShaderMesh({ polygons }) {
     return {
       u_resolution: { value: new THREE.Vector2(size.width, size.height) },
       u_time: { value: 0 },
-      u_count: { value: parseFloat(polygons.length) }, // Forzamos float explícito
+      u_count: { value: parseFloat(polygons.length) },
       u_positions: { value: positions },
       u_colors: { value: colors },
       u_shapes: { value: shapes }
     };
   }, [polygons, size]);
 
-  // FIX CRÍTICO: Usamos 'delta' para que la animación siempre inicie desde 0.0s en cada montura
   useFrame((state, delta) => {
     if (meshRef.current) {
       if (meshRef.current.material.uniforms.u_time.value < 5.0) {
@@ -128,8 +128,8 @@ function ShaderMesh({ polygons }) {
       <shaderMaterial
         fragmentShader={GenerativeFragmentShader}
         vertexShader={`
-          in vec3 position;
-          in vec2 uv;
+          // FIX DE COMPILACIÓN: Eliminamos 'in vec3 position' y 'in vec2 uv' 
+          // porque Three.js las inyecta de forma automática en GLSL3.
           out vec2 vUv;
           void main() {
             vUv = uv;
@@ -137,11 +137,44 @@ function ShaderMesh({ polygons }) {
           }
         `}
         uniforms={uniforms}
-        glslVersion={THREE.GLSL3} // Activamos explícitamente el compilador moderno GLSL 3.00 ES
+        glslVersion={THREE.GLSL3}
       />
     </mesh>
   );
 }
+
+export default function GenerativeCanvas({ polygons, onBack }) {
+  const canvasRef = useRef();
+
+  // 🔍 RASTREADOR DE EMERGENCIA PARA APP.JSX
+  // Abre la consola (F12) al dar clic en Terminar Sesión.
+  // Si aquí te aparece un arreglo vacío [], el problema es de App.jsx
+  useEffect(() => {
+    console.log("Polígonos reales recibidos desde App.jsx:", polygons);
+  }, [polygons]);
+
+  const handleExportImage = () => {
+    if (!canvasRef.current) return;
+    const glCanvas = canvasRef.current;
+    const exportCanvas = document.createElement('canvas');
+    const ctx = exportCanvas.getContext('2d');
+
+    const bleed = 80; 
+    exportCanvas.width = glCanvas.width + (bleed * 2);
+    exportCanvas.height = glCanvas.height + (bleed * 2);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+    ctx.drawImage(glCanvas, bleed, bleed);
+
+    const dataURL = exportCanvas.toDataURL("image/png", 1.0);
+    const link = document.createElement("a");
+    link.download = `CAPILL_Impresion_${new Date().toISOString().slice(0,10)}.png`;
+    link.href = dataURL;
+    link.click();
+  };
+
+  // ... El resto de tu return del componente se queda exactamente igual
 
 export default function GenerativeCanvas({ polygons, onBack }) {
   const canvasRef = useRef();
