@@ -22,8 +22,7 @@ function App() {
 
   // NUEVOS ESTADOS PARA EL LIENZO MAGNÉTICO
   const canvasRef = React.useRef(null); // Referencia al rectángulo invisible central
-  const cellsRef = React.useRef([]); // Referencia a las 9 celdas para medir sus posiciones
-  const [gridOccupancy, setGridOccupancy] = useState(Array(9).fill(null)); // [null, task_id, null...]
+ 
 
   // Estado para guardar la colección de acuarelas estampadas en el lienzo libre
   const [canvasPolygons, setCanvasPolygons] = useState([]); // [{ id, title, color, x, y, finalSets }]
@@ -206,6 +205,7 @@ function App() {
   const dropY = info.point.y;
   const rect = canvasRef.current.getBoundingClientRect();
 
+  // Verificamos si cayó en la zona segura central
   const isInsideCanvas = (
     dropX >= rect.left &&
     dropX <= rect.right &&
@@ -214,11 +214,7 @@ function App() {
   );
 
   if (isInsideCanvas) {
-    const col = Math.floor(((dropX - rect.left) / rect.width) * 3);
-    const row = Math.floor(((dropY - rect.top) / rect.height) * 3);
-    const gridIndex = Math.min(Math.max(row * 3 + col, 0), 8);
-
-    // Coordenadas relativas perfectas para que sea responsivo
+    // Coordenadas relativas perfectas (restando el margen del canvas y la mitad de la bolita)
     const localX = dropX - rect.left - 28;
     const localY = dropY - rect.top - 28;
 
@@ -228,33 +224,27 @@ function App() {
       color: task.color,
       x: localX,
       y: localY,
-      finalSets: task.finalSets || 3
+      finalSets: task.setsCompleted || 1 // Usamos la variable exacta de tu estado
     };
 
-    // 1. Estampado local inmediato
+    // 1. Estampado local inmediato en el Lienzo
     setCanvasPolygons(prev => [...prev, newPolygon]);
 
-    // 2. Deslizar fila en el Dock
-    setSpheres(prev => prev.map(s => 
-      s.id === task.id ? { ...s, is_in_canvas: true, grid_cell_index: gridIndex } : s
-    ));
+    // 2. Sacar del Dock local de pendientes
+    setSpheres(prev => prev.filter(s => s.id !== task.id));
 
-    // 3. PERSISTENCIA REAL: Sincronización con Supabase
+    // 3. PERSISTENCIA EN SUPABASE: Enviamos solo lo estrictamente necesario
     const { error } = await supabase
       .from('tasks')
       .update({
-        is_completed: true, // Se marca como completada oficialmente
-        grid_cell_index: gridIndex,
+        is_completed: true,   // <--- Usamos tu columna real de la DB
         canvas_x: localX,
-        canvas_y: localY,
-        // Guardamos también las subtareas finales y sets por si acaso
-        subtasks: task.subtasks,
-        sets_completed: task.setsCompleted
+        canvas_y: localY
       })
       .eq('id', task.id);
 
     if (error) {
-      console.error("Error al persistir posición en el lienzo:", error.message);
+      console.error("Error crítico al guardar en Supabase:", error.message);
     }
   }
 };
@@ -264,38 +254,34 @@ function App() {
       
       {/* RETÍCULA SUIZA 3X3 DELIMITADA EN LA ZONA SEGURA CENTRAL */}
       {/* RETÍCULA SUIZA 3X3 DELIMITADA Y CONTENEDOR DE ACUARELAS */}
-      <div 
-        ref={canvasRef} 
-        className="absolute top-32 bottom-32 left-10 right-10 z-0 pointer-events-none"
-        style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(3, 1fr)', gap: '1px' }}
-      >
-        {[...Array(9)].map((_, i) => (
-          <div key={i} className="border border-black/[0.02] flex items-center justify-center text-black/[0.02] text-xs font-sans" />
-        ))}
-
-        {/* CAPA DE CAPTURA VISUAL: Aquí flotan las acuarelas estampadas por el usuario */}
-        <div className="absolute inset-0 pointer-events-auto">
-          {canvasPolygons.map((poly) => (
-            <motion.div
-              key={`canvas-poly-${poly.id}`}
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 0.85 }}
-              style={{ 
-                position: 'absolute',
-                left: poly.x,
-                top: poly.y,
-                backgroundColor: poly.color,
-                ...getShapeStyle(poly.finalSets)
-              }}
-              className="w-14 h-14 shadow-2xl backdrop-blur-sm blur-[1.5px] mix-blend-multiply cursor-pointer group"
-            >
-              <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-capill-ink text-white text-[9px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl pointer-events-none z-30">
-                {poly.title}
-              </span>
-            </motion.div>
-          ))}
+      {/* RETÍCULA SUIZA CENTRAL LIMPIA */}
+        <div 
+          ref={canvasRef} 
+          className="absolute top-32 bottom-32 left-10 right-10 z-0 pointer-events-none border border-black/[0.01]"
+        >
+          {/* Capa donde flotan las acuarelas guardadas */}
+          <div className="absolute inset-0 pointer-events-auto">
+            {canvasPolygons.map((poly) => (
+              <motion.div
+                key={`canvas-poly-${poly.id}`}
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 0.85 }}
+                style={{ 
+                  position: 'absolute',
+                  left: poly.x,
+                  top: poly.y,
+                  backgroundColor: poly.color,
+                  ...getShapeStyle(poly.finalSets)
+                }}
+                className="w-14 h-14 shadow-2xl backdrop-blur-sm blur-[1.5px] mix-blend-multiply cursor-pointer group"
+              >
+                <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-capill-ink text-white text-[9px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl pointer-events-none z-30">
+                  {poly.title}
+                </span>
+              </motion.div>
+            ))}
+          </div>
         </div>
-      </div>
 
       {/* HEADER COHESIVO CON BOTÓN FÍSICO */}
       <header className="absolute top-10 left-10 z-10 flex items-center gap-6">
