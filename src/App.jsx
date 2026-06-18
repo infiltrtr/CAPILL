@@ -31,16 +31,17 @@ function App() {
   };
 
   const handleFinalize = () => {
-    setIsFinalizing(true);
-    setTimeout(() => {
-      const newSpheres = spheres.map(s => 
-        s.id === activeSphere.id ? { ...s, is_finalized: true } : s
-      );
-      setSpheres(newSpheres);
-      resetImmersive();
-      setIsFinalizing(false);
-    }, 1500);
-  };
+  setIsFinalizing(true); // Activa el efecto shaky por 3s
+  setTimeout(() => {
+    // Guardamos la finalización Y retenemos el número de sets logrados para la geometría
+    const newSpheres = spheres.map(s => 
+      s.id === activeSphere.id ? { ...s, is_finalized: true, finalSets: setsCompleted } : s
+    );
+    setSpheres(newSpheres);
+    resetImmersive();
+    setIsFinalizing(false);
+  }, 1500);
+};
 
   // Función para obtener el polígono CSS según los sets completados
   const getShapeStyle = (sets) => {
@@ -175,29 +176,48 @@ function App() {
         />
       </div>
 
-      {/* DOCK DE BOLITAS CORREGIDO */}
+      
+      {/* DOCK DE BOLITAS EVOLUTIVO Y ARRASTRABLE */}
       <div className="absolute bottom-10 flex gap-5 p-6 bg-white/20 backdrop-blur-xl rounded-full border border-white/40 shadow-lg">
         <AnimatePresence mode="popLayout">
           {spheres.map((s) => (
             <motion.div
-            key={s.id}
-            layout
-            layoutId={`sphere-container-${s.id}`}
-            initial={{ scale: 0, y: 20 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0, opacity: 0 }}
-            whileHover={s.is_finalized ? {} : { y: -10, scale: 1.1 }}
-            onClick={() => {
-              if (!s.is_finalized) setActiveSphere(s);
-            }}
-            style={{ backgroundColor: s.color }}
-            // CAMBIO CLAVE: Eliminado 'transition-all duration-300' para que FramerMotion haga la magia sin lag
-            className={`w-14 h-14 rounded-full border border-white/30 relative group ${
-              s.is_finalized ? 'opacity-30 grayscale cursor-not-allowed' : 'cursor-pointer'
-            }`}
-          >
-              <span className="absolute -top-12 left-1/2 -translate-x-1/2 bg-capill-ink text-white text-[10px] px-3 py-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl">
-                {s.title}
+              key={s.id}
+              layout
+              layoutId={`sphere-container-${s.id}`}
+              initial={{ scale: 0, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0, opacity: 0 }}
+              // Si ya está finalizada, eliminamos el brinco vertical para no interferir con el arrastre
+              whileHover={s.is_finalized ? { scale: 1.08 } : { y: -10, scale: 1.1 }}
+              
+              // COMPORTAMIENTO CONDICIONAL: Solo abre el menú si no está finalizada
+              onClick={() => {
+                if (!s.is_finalized) setActiveSphere(s);
+              }}
+
+              // MECÁNICA FASE 2: Habilitar arrastre libre por la pantalla solo si está finalizada
+              drag={s.is_finalized}
+              dragElastic={0.1}
+              // Límites aproximados para que el usuario pueda subir la figura al lienzo libremente
+              dragConstraints={{ top: -800, left: -600, right: 600, bottom: 100 }} 
+              
+              style={{ 
+                backgroundColor: s.color,
+                // Si está finalizada, adopta la geometría del polígono ganado, si no, se queda como círculo (borderRadius 50%)
+                ...(s.is_finalized ? getShapeStyle(s.finalSets || 3) : { borderRadius: '50%' })
+              }}
+              
+              // ESTÉTICA SUIZA / ACUARELA: Mix-blend-multiply + blur suave simulan la fusión CMYK al encimarse
+              className={`w-14 h-14 border border-white/30 relative group transition-colors duration-300 ${
+                s.is_finalized 
+                  ? 'cursor-grab active:cursor-grabbing shadow-2xl backdrop-blur-sm blur-[1.5px] mix-blend-multiply opacity-85' 
+                  : 'cursor-pointer'
+              }`}
+            >
+              {/* Etiqueta flotante con indicador de arrastre */}
+              <span className="absolute -top-12 left-1/2 -translate-x-1/2 bg-capill-ink text-white text-[10px] px-3 py-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl pointer-events-none z-30">
+                {s.title} {s.is_finalized && " ── ¡Arrástrame al lienzo!"}
               </span>
             </motion.div>
           ))}
