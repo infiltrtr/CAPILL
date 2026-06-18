@@ -264,50 +264,68 @@ function App() {
         )}
       </AnimatePresence>
 
-      {/* DOCK CON RESPALDO INTELIGENTE */}
+      {/* DOCK CON RESPALDO INTELIGENTE Y COLORES BLINDADOS */}
       <div className="absolute bottom-10 flex gap-5 p-6 bg-white/20 backdrop-blur-xl rounded-full border border-white/40 shadow-lg z-20">
         <AnimatePresence mode="popLayout">
-          {spheres.filter(s => !s.is_in_canvas).slice(0, 5).map((s) => (
-            <motion.div
-              key={s.id}
-              layout
-              layoutId={`sphere-container-${s.id}`}
-              initial={{ scale: 0, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0, opacity: 0 }}
-              whileHover={s.is_finalized ? { scale: 1.08 } : { y: -10, scale: 1.1 }}
-              onClick={() => {
-                if (!s.is_finalized) {
-                  setActiveSphere(s);
-                  setStep(s.step || 1);
-                  setSetsCompleted(s.setsCompleted || 0);
-                  setIsGuided(s.isGuided !== undefined ? s.isGuided : true);
-                  setMode(s.mode || 'input');
-                  setSubtasks(s.subtasks && s.subtasks.length > 0 ? s.subtasks : [
-                    { id: 1, text: '', completed: false },
-                    { id: 2, text: '', completed: false },
-                    { id: 3, text: '', completed: false }
-                  ]);
-                }
-              }}
-              drag={s.is_finalized}
-              dragElastic={0.1}
-              dragConstraints={{ top: -800, left: -600, right: 600, bottom: 100 }} 
-              style={{ 
-                backgroundColor: s.color,
-                ...(s.is_finalized ? getShapeStyle(s.finalSets || 3) : { borderRadius: '50%' })
-              }}
-              className={`w-14 h-14 border border-white/30 relative group ${
-                s.is_finalized 
-                  ? 'cursor-grab active:cursor-grabbing shadow-2xl backdrop-blur-sm blur-[1.5px] mix-blend-multiply opacity-85' 
-                  : 'cursor-pointer'
-              }`}
-            >
-              <span className="absolute -top-12 left-1/2 -translate-x-1/2 bg-capill-ink text-white text-[10px] px-3 py-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl pointer-events-none z-30">
-                {s.title} {s.is_finalized && " ── Arrástrame!"}
-              </span>
-            </motion.div>
-          ))}
+          {spheres
+            .filter(s => !s.is_in_canvas)
+            .slice(0, 5)
+            .map((s) => (
+              <motion.div
+                // 1. CLAVE: Asegura que React reconozca cada bolita como única
+                key={s.id} 
+                
+                // 2. Framer Motion Animation Properties
+                layout
+                layoutId={`sphere-container-${s.id}`}
+                initial={{ scale: 0, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0, opacity: 0 }}
+                
+                // 3. Hover and Tap states (Interaction feel)
+                whileHover={s.is_finalized ? { scale: 1.08 } : { y: -10, scale: 1.1 }}
+                whileTap={s.is_finalized ? {} : { scale: 0.95 }}
+
+                // 4. Mecánica de Clic (Modo Inmersivo)
+                onClick={() => {
+                  if (!s.is_finalized) {
+                    setActiveSphere(s);
+                    setStep(s.step || 1);
+                    setSetsCompleted(s.setsCompleted || 0);
+                    setIsGuided(s.isGuided !== undefined ? s.isGuided : true);
+                    setMode(s.mode || 'input');
+                    setSubtasks(s.subtasks && s.subtasks.length > 0 ? s.subtasks : [
+                      { id: 1, text: '', completed: false },
+                      { id: 2, text: '', completed: false },
+                      { id: 3, text: '', completed: false }
+                    ]);
+                  }
+                }}
+
+                // 5. Mecánica de Arrastre (Fase 2)
+                drag={s.is_finalized}
+                dragElastic={0.1}
+                dragConstraints={{ top: -800, left: -600, right: 600, bottom: 100 }} 
+                
+                // 6. ESTILO BLINDADO: Aseguramos el color
+                style={{ 
+                  // Si por alguna razón s.color falla, usa un gris claro CMYK-Safe de respaldo
+                  backgroundColor: s.color || '#E5E7EB', 
+                  ...(s.is_finalized ? getShapeStyle(s.finalSets || 3) : { borderRadius: '50%' })
+                }}
+                
+                className={`w-14 h-14 border border-white/30 relative group ${
+                  s.is_finalized 
+                    ? 'cursor-grab active:cursor-grabbing shadow-2xl backdrop-blur-sm blur-[1.5px] mix-blend-multiply opacity-85' 
+                    : 'cursor-pointer'
+                }`}
+              >
+                {/* Etiqueta flotante */}
+                <span className="absolute -top-12 left-1/2 -translate-x-1/2 bg-capill-ink text-white text-[10px] px-3 py-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl pointer-events-none z-30">
+                  {s.title} {s.is_finalized && " ── Arrástrame!"}
+                </span>
+              </motion.div>
+            ))}
         </AnimatePresence>
       </div>
 
