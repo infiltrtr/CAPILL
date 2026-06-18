@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@theme {
+  /* Definimos los colores de CÁPILL directamente en el tema */
+  --color-capill-paper: #fff3de;
+  --color-capill-ink: #1A1A1A;
+
+  /* Definimos la tipografía suiza */
+  --font-sans: "Inter", ui-sans-serif, system-ui;
+}
+
+/* Un pequeño toque cartesiano para asegurar que el fondo siempre sea el correcto */
+body {
+  background-color: var(--color-capill-paper);
+  color: var(--color-capill-ink);
+}
