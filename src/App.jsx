@@ -5,11 +5,16 @@ import { PHASES } from './constants';
 import FluidBackground from './FluidBackground';
 import './App.css'; 
 
+import GenerativeCanvas from './components/GenerativeCanvas';
+
 const RARE_CMYK_MUTATIONS = [
   "#A9DFBF", "#F9E79F", "#F5B041", "#A2D9CE", "#EDBB99"
 ];
 
 function App() {
+
+  const [isGenerativeMode, setIsGenerativeMode] = useState(false);
+  
   const [inputValue, setInputValue] = useState("");
   const [spheres, setSpheres] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -57,6 +62,40 @@ function App() {
 
   const handleFinalize = () => {
   setIsFinalizing(true);
+
+  const handleClearCanvas = async () => {
+  // 1. Limpieza visual inmediata en el estado de React
+  setCanvasPolygons([]);
+
+  // 2. Limpieza real en Supabase: 
+  // Modificamos SOLO las tareas completadas que tienen posición en el lienzo.
+  // En lugar de borrarlas (DELETE), les quitamos las coordenadas y el 'is_completed'
+  // para que regresen al flujo si es necesario, o simplemente las desvinculamos del lienzo.
+  const { error } = await supabase
+    .from('tasks')
+    .update({
+      canvas_x: null,
+      canvas_y: null,
+      grid_cell_index: null,
+      is_completed: false // Si quieres que vuelvan al Dock como pendientes, pon 'false'. Si quieres archivarlas para siempre, déjalo en 'true'.
+    })
+    .not('canvas_x', 'is', null); // Solo afecta a las que estaban pintadas
+
+  if (error) {
+    console.error("Error al limpiar el lienzo en Supabase:", error.message);
+  } else {
+    // Re-indexamos las tareas para que el Dock se vuelva a llenar con lo que quedó en el éter
+    const { data: pendingData } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('is_completed', false)
+      .order('created_at', { ascending: false });
+    
+    if (pendingData) {
+      setSpheres(pendingData.map(t => ({ ...t, is_in_canvas: false })));
+    }
+  }
+};
   
   // Capturamos el valor actual de los sets completados ANTES del delay de salida
   const finalSetsCount = setsCompleted || 1;
@@ -269,6 +308,9 @@ function App() {
 };
 
   return (
+    
+
+    
     <div className="h-screen w-full bg-capill-paper flex flex-col items-center justify-center overflow-hidden font-sans select-none relative">
       
       {/* RETÍCULA SUIZA 3X3 DELIMITADA EN LA ZONA SEGURA CENTRAL */}
@@ -310,6 +352,15 @@ function App() {
           </h1>
           {spheres.length > 0 && <p className="text-[9px] uppercase tracking-widest opacity-30 mt-1">Ctrl + K para crear</p>}
         </div>
+
+        {canvasPolygons.length > 0 && (
+  <button
+    onClick={() => setIsGenerativeMode(true)}
+    className="absolute top-10 right-32 text-xs font-mono tracking-widest bg-capill-ink text-white px-5 py-2.5 rounded-full hover:opacity-90 transition-opacity z-20 shadow-lg uppercase"
+  >
+    Terminar Sesión
+  </button>
+)}
 
         {/* El botón físico solo aparece si ya hay elementos en existencia */}
         {spheres.length > 0 && (
@@ -634,7 +685,22 @@ className="absolute bottom-10 right-10 w-20 h-20 backdrop-blur-xl border border-
           </motion.div>
         )}
       </AnimatePresence>
+
+{isGenerativeMode && (
+  <GenerativeCanvas 
+    polygons={canvasPolygons} 
+    onBack={() => {
+      // Al salir del modo generativo, limpiamos el lienzo automáticamente
+      handleClearCanvas(); 
+      setIsGenerativeMode(false);
+    }} 
+  />
+)}
+
     </div>
+
+        
+
   );
 }
 
