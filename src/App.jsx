@@ -124,38 +124,42 @@ function App() {
   };
 
   const handleCreateSphere = async (e) => {
-    if (inputValue.trim() !== "") {
-      const currentPhase = getPhaseConfig();
-      const { data: { user } } = await supabase.auth.getUser();
+  if (inputValue.trim() !== "") {
+    const currentPhase = getPhaseConfig();
+    const { data: { user } } = await supabase.auth.getUser();
 
-      let randomColor;
-      if (Math.random() < 0.15) { 
-        randomColor = RARE_CMYK_MUTATIONS[Math.floor(Math.random() * RARE_CMYK_MUTATIONS.length)];
-      } else {
-        randomColor = currentPhase.colors[Math.floor(Math.random() * currentPhase.colors.length)];
-      }
-
-      const newTask = {
-        title: inputValue,
-        color: randomColor,
-        type: 'normal',
-        phase: currentPhase.name,
-        is_completed: false,
-        user_id: user.id
-      };
-
-      const { data, error } = await supabase.from('tasks').insert([newTask]).select();
-      
-      if (!error && data) {
-        const localTask = { ...data[0], is_in_canvas: false };
-        setSpheres((prev) => [localTask, ...prev]);
-        setInputValue("");
-        setIsInputVisible(false); 
-      } else if (error) {
-        console.error("Error al guardar en Supabase:", error.message);
-      }
+    let randomColor;
+    if (Math.random() < 0.15) { 
+      randomColor = RARE_CMYK_MUTATIONS[Math.floor(Math.random() * RARE_CMYK_MUTATIONS.length)];
+    } else {
+      currentPhase.colors[Math.floor(Math.random() * currentPhase.colors.length)];
     }
-  };
+
+    const newTask = {
+      title: inputValue,
+      color: randomColor,
+      type: 'normal',
+      phase: currentPhase.name,
+      is_completed: false,
+      user_id: user.id
+    };
+
+    const { data, error } = await supabase.from('tasks').insert([newTask]).select();
+    
+    if (!error && data) {
+      const localTask = { ...data[0], is_in_canvas: false };
+      
+      // CAMBIO CLAVE: Cambiamos [localTask, ...prev] por [...prev, localTask]
+      // Esto manda la nueva certeza al final de la fila (al respaldo invisible)
+      setSpheres((prev) => [...prev, localTask]);
+      
+      setInputValue("");
+      setIsInputVisible(false); 
+    } else if (error) {
+      console.error("Error al guardar en Supabase:", error.message);
+    }
+  }
+};
 
   if (loading) {
     return (
