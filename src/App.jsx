@@ -4,6 +4,16 @@ import { supabase } from './supabaseClient';
 import { PHASES } from './constants';
 
 function App() {
+
+  // Paleta de Mutación: Colores raros fuera del espectro horario tradicional, 100% CMYK-Safe
+const RARE_CMYK_MUTATIONS = [
+  "#A9DFBF", // Verde Salvia / Menta Vintage (C:30, M:0, Y:35, K:0)
+  "#F9E79F", // Amarillo Ocre Pastel / Vainilla (C:0, M:5, Y:40, K:0)
+  "#F5B041", // Naranja Melocotón / Terracota Suave (C:0, M:35, Y:75, K:0)
+  "#A2D9CE", // Verde Azulado Deslavado / Teal Muted (C:35, M:0, Y:20, K:0)
+  "#EDBB99"  // Rosa Viejo / Salmón Journaling (C:0, M:25, Y:35, K:5)
+];
+
   const [inputValue, setInputValue] = useState("");
   const [spheres, setSpheres] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -120,33 +130,46 @@ function App() {
   };
 
   const handleCreateSphere = async (e) => {
-    if (e.key === 'Enter' && inputValue.trim() !== "") {
-      const currentPhase = getPhaseConfig();
-      const randomColor = currentPhase.colors[Math.floor(Math.random() * currentPhase.colors.length)];
-      const { data: { user } } = await supabase.auth.getUser();
+  if (e.key === 'Enter' && inputValue.trim() !== "") {
+    const currentPhase = getPhaseConfig();
+    const { data: { user } } = await supabase.auth.getUser();
 
-      const newTask = {
-        title: inputValue,
-        color: randomColor,
-        type: 'normal',
-        phase: currentPhase.name,
-        is_completed: false,
-        user_id: user.id 
-      };
+    // --- ALGORITMO DE MUTACIÓN DE COLOR CMYK-SAFE ---
+    let randomColor;
+    const MUTATION_CHANCE = 0.15; // 15% de probabilidad de conseguir un color raro
 
-      const { data, error } = await supabase
-        .from('tasks')
-        .insert([newTask])
-        .select();
-
-      if (!error && data) {
-        setSpheres((prev) => [data[0], ...prev].slice(0, 5));
-        setInputValue("");
-      } else if (error) {
-        console.error("Error al guardar:", error.message);
-      }
+    if (Math.random() < MUTATION_CHANCE) {
+      // Éxito: El usuario extrajo un color fuera del espectro horario actual
+      const randomIndex = Math.floor(Math.random() * RARE_CMYK_MUTATIONS.length);
+      randomColor = RARE_CMYK_MUTATIONS[randomIndex];
+    } else {
+      // Flujo normal: Color extraído de la fase del día (mañana, tarde o noche)
+      randomColor = currentPhase.colors[Math.floor(Math.random() * currentPhase.colors.length)];
     }
-  };
+    // -------------------------------------------------
+
+    const newTask = {
+      title: inputValue,
+      color: randomColor,
+      type: 'normal',
+      phase: currentPhase.name,
+      is_completed: false,
+      user_id: user.id 
+    };
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert([newTask])
+      .select();
+
+    if (!error && data) {
+      setSpheres((prev) => [data[0], ...prev].slice(0, 5));
+      setInputValue("");
+    } else if (error) {
+      console.error("Error al guardar:", error.message);
+    }
+  }
+};
 
   if (loading) {
     return (
