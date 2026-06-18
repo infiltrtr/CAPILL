@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from './supabaseClient';
 import { PHASES } from './constants';
+import FluidBackground from './FluidBackground';
 
 function App() {
 
@@ -253,11 +254,25 @@ const RARE_CMYK_MUTATIONS = [
           <motion.div
             layoutId={`sphere-container-${activeSphere.id}`}
             transition={{ type: "spring", stiffness: 120, damping: 20 }}
-            style={{ backgroundColor: activeSphere.color }}
+           style={{ backgroundColor: setsCompleted > 0 ? 'transparent' : activeSphere.color }}
             className={`fixed inset-0 w-full h-full z-50 flex flex-col items-center justify-center p-6 overflow-hidden transition-colors duration-300 ${
               activeSphere.phase === 'noche' ? 'text-white' : 'text-capill-ink'
             }`}
           >
+            {/* Inyección del Motor Fluido 3D en el instante del primer set */}
+          <AnimatePresence>
+            {setsCompleted > 0 && (
+              <motion.div 
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 1 }} 
+                exit={{ opacity: 0 }} 
+                transition={{ duration: 1.5 }}
+                className="absolute inset-0 z-0"
+              >
+                <FluidBackground baseColor={activeSphere.color} />
+              </motion.div>
+            )}
+          </AnimatePresence>
             <button 
               onClick={resetImmersive}
               className="absolute top-10 left-10 text-xs tracking-widest uppercase opacity-40 hover:opacity-100 transition-opacity cursor-pointer font-sans"
