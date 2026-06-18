@@ -176,30 +176,7 @@ export default function GenerativeCanvas({ polygons, onBack }) {
 
   // ... El resto de tu return del componente se queda exactamente igual
 
-export default function GenerativeCanvas({ polygons, onBack }) {
-  const canvasRef = useRef();
 
-  const handleExportImage = () => {
-    if (!canvasRef.current) return;
-    
-    const glCanvas = canvasRef.current;
-    const exportCanvas = document.createElement('canvas');
-    const ctx = exportCanvas.getContext('2d');
-
-    const bleed = 80; 
-    exportCanvas.width = glCanvas.width + (bleed * 2);
-    exportCanvas.height = glCanvas.height + (bleed * 2);
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
-    ctx.drawImage(glCanvas, bleed, bleed);
-
-    const dataURL = exportCanvas.toToDataURL ? exportCanvas.toDataURL("image/png", 1.0) : exportCanvas.toDataURL("image/png");
-    const link = document.createElement("a");
-    link.download = `CAPILL_Impresion_${new Date().toISOString().slice(0,10)}.png`;
-    link.href = dataURL;
-    link.click();
-  };
 
   return (
     <div className="fixed inset-0 w-full h-full bg-white z-50 flex flex-col justify-between">
