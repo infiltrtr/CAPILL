@@ -195,7 +195,8 @@ useEffect(() => {
       layoutId={`sphere-container-${activeSphere.id}`}
       transition={{ type: "spring", stiffness: 120, damping: 20 }}
       style={{ backgroundColor: activeSphere.color }}
-      className={`absolute inset-0 z-50 flex flex-col items-center justify-center p-6 transition-colors duration-300 ${
+      // CAMBIO CLAVE: Usar 'fixed' y 'overflow-hidden' ancla el fondo y destruye el efecto zoom/jitter
+      className={`fixed inset-0 w-full h-full z-50 flex flex-col items-center justify-center p-6 overflow-hidden transition-colors duration-300 ${
         activeSphere.phase === 'noche' ? 'text-white' : 'text-capill-ink'
       }`}
     >
@@ -207,7 +208,7 @@ useEffect(() => {
         ← Volver al éter
       </button>
 
-      {/* Título del objetivo (Solo en modo captura) */}
+      {/* Título del objetivo */}
       {mode === 'input' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center w-full flex flex-col items-center">
           <h2 className="text-xs uppercase tracking-widest opacity-40 font-sans font-bold mb-2">Objetivo actual</h2>
@@ -263,14 +264,14 @@ useEffect(() => {
         )}
       </AnimatePresence>
 
-      {/* Contenedor Flex para agrupar los círculos y el nuevo botón manual verticalmente */}
-      <div className="flex flex-col items-center justify-center mt-12 relative z-10">
-        
+      {/* Contenedor Dinámico para Círculos y Botón Sellar */}
+      <motion.div 
+        layout 
+        // CAMBIO CLAVE: Cambia de posición absoluta (escondido abajo) a un bloque flex limpio sin superponerse
+        className={mode === 'input' ? 'absolute bottom-8 left-1/2 -translate-x-1/2 z-10' : 'flex flex-col items-center justify-center mt-12 z-10 relative'}
+      >
         {/* Los Círculos Romanos */}
-        <motion.div 
-          layout
-          className={mode === 'input' ? "absolute bottom-12 flex gap-4 left-1/2 -translate-x-1/2 w-max" : "flex gap-8 items-center justify-center"}
-        >
+        <motion.div layout className={`flex ${mode === 'input' ? 'gap-4' : 'gap-8'} items-center justify-center`}>
           {[0, 1, 2].map((index) => {
             const roman = ['I', 'II', 'III'][index];
             const isCurrentOrPast = step >= index + 1;
@@ -288,7 +289,6 @@ useEffect(() => {
                 transition={{ type: "spring", stiffness: 200, damping: 15 }}
                 onClick={() => {
                   if (mode === 'validating') {
-                    // Lógica Reversible: cambia entre true y false
                     const newTasks = [...subtasks];
                     newTasks[index].completed = !newTasks[index].completed;
                     setSubtasks(newTasks);
@@ -301,12 +301,11 @@ useEffect(() => {
               >
                 {roman}
                 
-                {/* Etiqueta flotante con el recordatorio del texto real escrito en hover */}
                 {mode === 'validating' && task.text && (
                    <span className="absolute -top-14 left-1/2 -translate-x-1/2 bg-black/70 text-white text-[11px] px-3 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-normal max-w-[160px] text-center font-sans font-light backdrop-blur-md pointer-events-none shadow-2xl border border-white/10 z-20">
                      {task.text}
                      <span className="block text-[8px] opacity-40 mt-1 uppercase tracking-wider">
-                       {task.completed ? 'Resetear' : 'Completar'}
+                       {task.completed ? 'Deshacer' : 'Completar'}
                      </span>
                    </span>
                 )}
@@ -315,7 +314,7 @@ useEffect(() => {
           })}
         </motion.div>
 
-        {/* Botón Glassmorphism manual para Sellar el Bloque */}
+        {/* Botón Sellar */}
         <AnimatePresence>
           {mode === 'validating' && subtasks.every(t => t.completed) && (
             <motion.button
@@ -338,17 +337,17 @@ useEffect(() => {
             </motion.button>
           )}
         </AnimatePresence>
-      </div>
+      </motion.div>
 
-      {/* Botón Finalizador Evolutivo (Esquina inferior derecha) con Giro 360 en Eje Y */}
+      {/* Botón Finalizador Evolutivo (Esquina inferior derecha) */}
       <AnimatePresence>
         {setsCompleted > 0 && (
           <motion.button
-            key={setsCompleted} // Forzar re-render para disparar el spin y el bounce juntos
+            key={setsCompleted}
             initial={{ scale: 0, opacity: 0, rotateY: 0 }}
             animate={{ 
-              scale: [1, 1.3, 1], // Efecto bouncy
-              rotateY: 360,       // Giro sutil en el eje Y
+              scale: [1, 1.3, 1],
+              rotateY: 360,
               opacity: 1 
             }}
             transition={{ 
@@ -356,13 +355,13 @@ useEffect(() => {
               rotateY: { duration: 0.7, ease: "easeInOut" }
             }}
             onClick={() => {
-              alert(`Actividad guardada. Forjado un polígono de ${setsCompleted <= 2 ? 'forma circular' : (setsCompleted + ' lados')}.`);
+              // CAMBIO CLAVE: Eliminado el alert. resetImmersive() acciona la interpolación mágica al Dock.
               resetImmersive();
             }}
             style={{ 
               ...getShapeStyle(setsCompleted), 
               backgroundColor: 'rgba(255,255,255,0.15)',
-              perspective: 1000 // Le da profundidad 3D al giro en Y
+              perspective: 1000
             }}
             className="absolute bottom-10 right-10 w-20 h-20 backdrop-blur-xl border border-white/40 flex items-center justify-center text-white font-bold cursor-pointer hover:bg-white/30 transition-colors shadow-[0_0_30px_rgba(255,255,255,0.2)] z-30"
           >
