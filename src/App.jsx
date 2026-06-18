@@ -199,6 +199,7 @@ useEffect(() => {
         activeSphere.phase === 'noche' ? 'text-white' : 'text-capill-ink'
       }`}
     >
+      {/* Botón para regresar al éter */}
       <button 
         onClick={resetImmersive}
         className="absolute top-10 left-10 text-xs tracking-widest uppercase opacity-40 hover:opacity-100 transition-opacity cursor-pointer font-sans"
@@ -206,7 +207,7 @@ useEffect(() => {
         ← Volver al éter
       </button>
 
-      {/* Solo mostramos el título si estamos capturando datos */}
+      {/* Título del objetivo (Solo en modo captura) */}
       {mode === 'input' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center w-full flex flex-col items-center">
           <h2 className="text-xs uppercase tracking-widest opacity-40 font-sans font-bold mb-2">Objetivo actual</h2>
@@ -214,7 +215,7 @@ useEffect(() => {
         </motion.div>
       )}
 
-      {/* Caja de Diálogo: Desaparece al validar */}
+      {/* Caja de Diálogo */}
       <AnimatePresence mode="wait">
         {mode === 'input' && (
           <motion.div 
@@ -225,19 +226,15 @@ useEffect(() => {
               activeSphere.phase === 'noche' ? 'bg-white/5 border-white/10 shadow-black/40' : 'bg-white/10 border-white/20 shadow-xl'
             }`}
           >
-            {isGuided ? (
-               <div className="w-full text-center mb-6">
-                 <p className="text-xl font-medium mb-2">
-                   {step === 1 ? '¿Cuál es el primer paso físico necesario?' : step === 2 ? '¿En dónde se realizará la actividad?' : '¿Qué sigue inmediatamente después?'}
-                 </p>
-                 {step === 1 && <p className="text-sm opacity-40 font-sans italic">Ejemplo: {placeholders[carouselIndex]}...</p>}
-               </div>
-            ) : (
-               <div className="w-full text-center mb-6">
-                 <p className="text-xl font-medium mb-2">¿Se requieren más pasos?</p>
-                 <p className="text-sm opacity-40 font-sans italic">Desglosa el siguiente bloque...</p>
-               </div>
-            )}
+            <div className="w-full text-center mb-6">
+              <p className="text-xl font-medium mb-2">
+                {isGuided 
+                  ? (step === 1 ? '¿Cuál es el primer paso físico necesario?' : step === 2 ? '¿En dónde se realizará la actividad?' : '¿Qué sigue inmediatamente después?')
+                  : '¿Se requieren más pasos?'}
+              </p>
+              {isGuided && step === 1 && <p className="text-sm opacity-40 font-sans italic">Ejemplo: {placeholders[carouselIndex]}...</p>}
+              {!isGuided && <p className="text-sm opacity-40 font-sans italic">Desglosa el siguiente bloque...</p>}
+            </div>
 
             <input
               autoFocus
@@ -245,7 +242,6 @@ useEffect(() => {
               placeholder="Escribe la acción..."
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && e.target.value.trim() !== "") {
-                  // Guardar el texto en la subtarea actual
                   const newTasks = [...subtasks];
                   newTasks[step - 1].text = e.target.value;
                   setSubtasks(newTasks);
@@ -254,101 +250,123 @@ useEffect(() => {
                     setStep(prev => prev + 1);
                     e.target.value = "";
                   } else {
-                    // Terminamos el set, pasamos a validación
                     setMode('validating');
                     e.target.value = "";
                   }
                 }
               }}
               className={`w-full bg-transparent text-center text-lg outline-none py-2 transition-colors font-sans font-light border-b ${
-                activeSphere.phase === 'noche' ? 'border-white/20 focus:border-white/60 text-white placeholder:text-white/20' : 'border-capill-ink/20 focus:border-capill-ink/50 text-capill-ink placeholder:text-capill-ink/20'
+                activeSphere.phase === 'noche' ? 'border-white/20 focus:border-white/60 text-white' : 'border-capill-ink/20 focus:border-capill-ink/50 text-capill-ink'
               }`}
             />
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Los Círculos Romanos / Círculos de Validación */}
-      <motion.div 
-        layout
-        className={mode === 'input' ? "absolute bottom-12 flex gap-4" : "flex gap-8 items-center justify-center mt-12 relative z-10"}
-      >
-        {[0, 1, 2].map((index) => {
-          const roman = ['I', 'II', 'III'][index];
-          const isCurrentOrPast = step >= index + 1;
-          const task = subtasks[index];
+      {/* Contenedor Flex para agrupar los círculos y el nuevo botón manual verticalmente */}
+      <div className="flex flex-col items-center justify-center mt-12 relative z-10">
+        
+        {/* Los Círculos Romanos */}
+        <motion.div 
+          layout
+          className={mode === 'input' ? "absolute bottom-12 flex gap-4 left-1/2 -translate-x-1/2 w-max" : "flex gap-8 items-center justify-center"}
+        >
+          {[0, 1, 2].map((index) => {
+            const roman = ['I', 'II', 'III'][index];
+            const isCurrentOrPast = step >= index + 1;
+            const task = subtasks[index];
 
-          return (
-            <motion.div
-              key={`circle-${index}`}
-              layout
-              animate={{ 
-                rotate: task.completed ? 360 : 0, 
-                scale: mode === 'merging' ? 0 : (mode === 'validating' ? 1.5 : (isCurrentOrPast ? 1.1 : 1)),
-                opacity: mode === 'merging' ? 0 : 1
-              }}
-              transition={{ type: "spring", stiffness: 200, damping: 15 }}
-              onClick={() => {
-                if (mode === 'validating' && !task.completed) {
-                  const newTasks = [...subtasks];
-                  newTasks[index].completed = true;
-                  setSubtasks(newTasks);
-                  
-                  // Si se completaron los 3
-                  if (newTasks.every(t => t.completed)) {
-                    setTimeout(() => {
-                      setMode('merging');
-                      // Simulamos el viaje al botón inferior con un timeout
-                      setTimeout(() => {
-                        setSetsCompleted(prev => prev + 1);
-                        setMode('input');
-                        setIsGuided(false);
-                        setStep(1);
-                        setSubtasks([{id: 1, text: '', completed: false}, {id: 2, text: '', completed: false}, {id: 3, text: '', completed: false}]);
-                      }, 600);
-                    }, 500);
+            return (
+              <motion.div
+                key={`circle-${index}`}
+                layout
+                animate={{ 
+                  rotate: task.completed ? 360 : 0, 
+                  scale: mode === 'merging' ? 0 : (mode === 'validating' ? 1.5 : (isCurrentOrPast ? 1.1 : 1)),
+                  opacity: mode === 'merging' ? 0 : 1
+                }}
+                transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                onClick={() => {
+                  if (mode === 'validating') {
+                    // Lógica Reversible: cambia entre true y false
+                    const newTasks = [...subtasks];
+                    newTasks[index].completed = !newTasks[index].completed;
+                    setSubtasks(newTasks);
                   }
-                }
-              }}
-              title={mode === 'validating' ? task.text : ""}
-              // Aquí aplicamos el Glassmorphism cuando se completan
-              className={`rounded-full flex items-center justify-center font-serif font-bold transition-colors duration-500 group relative
-                ${mode === 'input' ? 'w-10 h-10 text-sm border' : 'w-20 h-20 text-2xl border-2 cursor-pointer shadow-2xl'}
-                ${task.completed ? 'bg-white/10 backdrop-blur-md border-white/40 text-white' : (isCurrentOrPast ? 'bg-white text-black border-white' : 'border-white/20 opacity-30 text-white')}
-              `}
-            >
-              {roman}
-              
-              {/* Etiqueta flotante en hover durante la validación */}
-              {mode === 'validating' && !task.completed && (
-                 <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-black/50 text-white text-[10px] px-3 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap font-sans font-light backdrop-blur-sm">
-                   Clic para completar
-                 </span>
-              )}
-            </motion.div>
-          );
-        })}
-      </motion.div>
+                }}
+                className={`rounded-full flex items-center justify-center font-serif font-bold transition-colors duration-500 group relative select-none
+                  ${mode === 'input' ? 'w-10 h-10 text-sm border' : 'w-20 h-20 text-2xl border-2 cursor-pointer shadow-2xl'}
+                  ${task.completed ? 'bg-white/20 backdrop-blur-md border-white/50 text-white' : (isCurrentOrPast ? 'bg-white text-black border-white' : 'border-white/20 opacity-30 text-white')}
+                `}
+              >
+                {roman}
+                
+                {/* Etiqueta flotante con el recordatorio del texto real escrito en hover */}
+                {mode === 'validating' && task.text && (
+                   <span className="absolute -top-14 left-1/2 -translate-x-1/2 bg-black/70 text-white text-[11px] px-3 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-normal max-w-[160px] text-center font-sans font-light backdrop-blur-md pointer-events-none shadow-2xl border border-white/10 z-20">
+                     {task.text}
+                     <span className="block text-[8px] opacity-40 mt-1 uppercase tracking-wider">
+                       {task.completed ? 'Resetear' : 'Completar'}
+                     </span>
+                   </span>
+                )}
+              </motion.div>
+            );
+          })}
+        </motion.div>
 
-      {/* Botón Finalizador (Esquina inferior derecha) - Aparece tras el 1er set */}
+        {/* Botón Glassmorphism manual para Sellar el Bloque */}
+        <AnimatePresence>
+          {mode === 'validating' && subtasks.every(t => t.completed) && (
+            <motion.button
+              initial={{ opacity: 0, y: 20, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.9 }}
+              onClick={() => {
+                setMode('merging');
+                setTimeout(() => {
+                  setSetsCompleted(prev => prev + 1);
+                  setMode('input');
+                  setIsGuided(false);
+                  setStep(1);
+                  setSubtasks([{id: 1, text: '', completed: false}, {id: 2, text: '', completed: false}, {id: 3, text: '', completed: false}]);
+                }, 600);
+              }}
+              className="mt-12 px-8 py-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl text-xs font-sans tracking-widest uppercase text-white hover:bg-white/20 transition-all cursor-pointer shadow-xl hover:scale-105 active:scale-95"
+            >
+              Sellar Bloque
+            </motion.button>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Botón Finalizador Evolutivo (Esquina inferior derecha) con Giro 360 en Eje Y */}
       <AnimatePresence>
         {setsCompleted > 0 && (
           <motion.button
-            key={setsCompleted} // Forzamos re-render para disparar la animación Bouncy
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: [1, 1.4, 1], opacity: 1 }} // Animación Bouncy al absorber
-            exit={{ scale: 0, opacity: 0 }}
+            key={setsCompleted} // Forzar re-render para disparar el spin y el bounce juntos
+            initial={{ scale: 0, opacity: 0, rotateY: 0 }}
+            animate={{ 
+              scale: [1, 1.3, 1], // Efecto bouncy
+              rotateY: 360,       // Giro sutil en el eje Y
+              opacity: 1 
+            }}
+            transition={{ 
+              scale: { type: "spring", stiffness: 250, damping: 15 },
+              rotateY: { duration: 0.7, ease: "easeInOut" }
+            }}
             onClick={() => {
-              alert("Actividad terminada. Polígono enviado al lienzo.");
+              alert(`Actividad guardada. Forjado un polígono de ${setsCompleted <= 2 ? 'forma circular' : (setsCompleted + ' lados')}.`);
               resetImmersive();
             }}
             style={{ 
               ...getShapeStyle(setsCompleted), 
-              backgroundColor: 'rgba(255,255,255,0.15)' 
+              backgroundColor: 'rgba(255,255,255,0.15)',
+              perspective: 1000 // Le da profundidad 3D al giro en Y
             }}
-            className="absolute bottom-10 right-10 w-20 h-20 backdrop-blur-xl border border-white/40 flex items-center justify-center text-white font-bold cursor-pointer hover:bg-white/30 transition-colors shadow-[0_0_30px_rgba(255,255,255,0.2)]"
+            className="absolute bottom-10 right-10 w-20 h-20 backdrop-blur-xl border border-white/40 flex items-center justify-center text-white font-bold cursor-pointer hover:bg-white/30 transition-colors shadow-[0_0_30px_rgba(255,255,255,0.2)] z-30"
           >
-            <span className="font-sans text-xs tracking-widest opacity-70">FIN</span>
+            <span className="font-sans text-[10px] tracking-widest opacity-60">FIN</span>
           </motion.button>
         )}
       </AnimatePresence>
