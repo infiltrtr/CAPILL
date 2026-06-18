@@ -12,6 +12,29 @@ function App() {
 const [step, setStep] = useState(1);
 const [carouselIndex, setCarouselIndex] = useState(0);
 
+const updateSphereData = (updatedSubtasks) => {
+  const newSpheres = spheres.map(s => 
+    s.id === activeSphere.id ? { ...s, subtasks: updatedSubtasks, step, setsCompleted, isGuided } : s
+  );
+  setSpheres(newSpheres);
+  // Aquí podrías llamar a supabase para persistir en la nube
+};
+
+const [isFinalizing, setIsFinalizing] = useState(false);
+
+const handleFinalize = () => {
+  setIsFinalizing(true); // Activa el efecto shaky
+  setTimeout(() => {
+    // Después de 3s de drama, bloqueamos y salimos
+    const newSpheres = spheres.map(s => 
+      s.id === activeSphere.id ? { ...s, is_finalized: true } : s
+    );
+    setSpheres(newSpheres);
+    resetImmersive();
+    setIsFinalizing(false);
+  }, 3000);
+};
+
 // Nuevos estados para la coreografía de inmersión
 const [subtasks, setSubtasks] = useState([
   { id: 1, text: '', completed: false },
@@ -169,6 +192,7 @@ useEffect(() => {
       <div className="absolute bottom-10 flex gap-5 p-6 bg-white/20 backdrop-blur-xl rounded-full border border-white/40 shadow-lg">
         <AnimatePresence mode="popLayout">
           {spheres.map((s) => (
+
             <motion.div
               key={s.id}
               layout
@@ -180,17 +204,25 @@ useEffect(() => {
               onClick={() => setActiveSphere(s)} // <-- Activa el modo inmersivo
               style={{ backgroundColor: s.color }}
               className="w-14 h-14 rounded-full cursor-pointer border border-white/30 relative group"
+
+              onClick={() => {
+                if (!s.is_finalized) setActiveSphere(s);
+              }}
+              className={`... ${s.is_finalized ? 'opacity-50 grayscale cursor-not-allowed' : 'cursor-pointer'}`}
+
             >
               <span className="absolute -top-12 left-1/2 -translate-x-1/2 bg-capill-ink text-white text-[10px] px-3 py-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl">
                 {s.title}
               </span>
             </motion.div>
+            
           ))}
         </AnimatePresence>
       </div>
 
       <AnimatePresence>
   {activeSphere && (
+
     <motion.div
       layoutId={`sphere-container-${activeSphere.id}`}
       transition={{ type: "spring", stiffness: 120, damping: 20 }}
@@ -279,21 +311,21 @@ useEffect(() => {
 
             return (
               <motion.div
-                key={`circle-${index}`}
-                layout
-                animate={{ 
-                  rotate: task.completed ? 360 : 0, 
-                  scale: mode === 'merging' ? 0 : (mode === 'validating' ? 1.5 : (isCurrentOrPast ? 1.1 : 1)),
-                  opacity: mode === 'merging' ? 0 : 1
-                }}
-                transition={{ type: "spring", stiffness: 200, damping: 15 }}
-                onClick={() => {
-                  if (mode === 'validating') {
-                    const newTasks = [...subtasks];
-                    newTasks[index].completed = !newTasks[index].completed;
-                    setSubtasks(newTasks);
-                  }
-                }}
+              key={`circle-${index}`}
+              layout
+              animate={{ 
+                rotateY: task.completed ? 360 : 0, // <-- Spin 3D cambiado aquí
+                scale: mode === 'merging' ? 0 : (mode === 'validating' ? 1.5 : (isCurrentOrPast ? 1.1 : 1)),
+              }}
+              style={{ perspective: 1000 }} // Añadir perspectiva para el giro 3D
+              onClick={() => {
+                if (mode === 'validating') {
+                  const newTasks = [...subtasks];
+                  newTasks[index].completed = !newTasks[index].completed;
+                  setSubtasks(newTasks);
+                  updateSphereData(newTasks); // <-- Persistencia inmediata
+                }
+              }}
                 className={`rounded-full flex items-center justify-center font-serif font-bold transition-colors duration-500 group relative select-none
                   ${mode === 'input' ? 'w-10 h-10 text-sm border' : 'w-20 h-20 text-2xl border-2 cursor-pointer shadow-2xl'}
                   ${task.completed ? 'bg-white/20 backdrop-blur-md border-white/50 text-white' : (isCurrentOrPast ? 'bg-white text-black border-white' : 'border-white/20 opacity-30 text-white')}
@@ -343,21 +375,17 @@ useEffect(() => {
       <AnimatePresence>
         {setsCompleted > 0 && (
           <motion.button
-            key={setsCompleted}
-            initial={{ scale: 0, opacity: 0, rotateY: 0 }}
             animate={{ 
-              scale: [1, 1.3, 1],
-              rotateY: 360,
-              opacity: 1 
+              rotate: [0, 360], // <-- Spin 2D cambiado aquí
+              x: isFinalizing ? [-2, 2, -2, 2, -1, 1, 0] : 0, // <-- Efecto Shaky
+              scale: isFinalizing ? 1.2 : 1
             }}
             transition={{ 
-              scale: { type: "spring", stiffness: 250, damping: 15 },
-              rotateY: { duration: 0.7, ease: "easeInOut" }
+              rotate: { duration: 0.8, ease: "easeInOut" },
+              x: { repeat: isFinalizing ? Infinity : 0, duration: 0.1 }
             }}
-            onClick={() => {
-              // CAMBIO CLAVE: Eliminado el alert. resetImmersive() acciona la interpolación mágica al Dock.
-              resetImmersive();
-            }}
+            onClick={handleFinalize}
+            disabled={isFinalizing}
             style={{ 
               ...getShapeStyle(setsCompleted), 
               backgroundColor: 'rgba(255,255,255,0.15)',
