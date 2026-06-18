@@ -129,4 +129,77 @@ function ShaderMesh({ polygons }) {
 
   return (
     <mesh ref={meshRef}>
-      <planeGeometry args={
+      <planeGeometry args={[2, 2]} />
+      <shaderMaterial
+        fragmentShader={GenerativeFragmentShader}
+        vertexShader={`
+          out vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = vec4(position, 1.0);
+          }
+        `}
+        uniforms={uniforms}
+        glslVersion={THREE.GLSL3}
+      />
+    </mesh>
+  );
+}
+
+export default function GenerativeCanvas({ polygons, onBack }) {
+  const canvasRef = useRef();
+
+  const handleExportImage = () => {
+    if (!canvasRef.current) return;
+    
+    const glCanvas = canvasRef.current;
+    const exportCanvas = document.createElement('canvas');
+    const ctx = exportCanvas.getContext('2d');
+
+    const bleed = 80; 
+    exportCanvas.width = glCanvas.width + (bleed * 2);
+    exportCanvas.height = glCanvas.height + (bleed * 2);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+    ctx.drawImage(glCanvas, bleed, bleed);
+
+    const dataURL = exportCanvas.toDataURL("image/png", 1.0);
+    const link = document.createElement("a");
+    link.download = `CAPILL_Impresion_${new Date().toISOString().slice(0,10)}.png`;
+    link.href = dataURL;
+    link.click();
+  };
+
+  return (
+    <div className="fixed inset-0 w-full h-full bg-white z-50 flex flex-col justify-between">
+      <div className="absolute inset-0 w-full h-full">
+        <Canvas 
+          dpr={[1, 1.5]} 
+          gl={{ preserveDrawingBuffer: true, antialias: true }} 
+          onCreated={({ gl }) => { 
+            canvasRef.current = gl.domElement; 
+            gl.setClearColor('#FFFFFF'); 
+          }}
+        >
+          <ShaderMesh polygons={polygons} />
+        </Canvas>
+      </div>
+
+      <div className="relative w-full p-8 flex justify-between items-center pointer-events-none z-50">
+        <button 
+          onClick={onBack}
+          className="pointer-events-auto text-xs font-mono tracking-widest text-black/50 hover:text-black transition-colors uppercase"
+        >
+          ← Volver y Limpiar Lienzo
+        </button>
+        <button 
+          onClick={handleExportImage}
+          className="pointer-events-auto bg-black text-white text-xs font-mono tracking-widest px-8 py-4 rounded-full hover:bg-black/80 transition-all shadow-[0_10px_30px_rgba(0,0,0,0.3)] uppercase"
+        >
+          Imprimir Obra (PNG)
+        </button>
+      </div>
+    </div>
+  );
+}
