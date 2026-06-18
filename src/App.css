@@ -182,3 +182,22 @@
     border-right-color: var(--border);
   }
 }
+
+/* App.css */
+.canvas-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  pointer-events: none; /* Crucial: permite clics a través de la retícula */
+  z-index: 5; /* Por encima del fondo, por debajo del Dock */
+}
+
+/* Opcional: Para visualizar la retícula mientras diseñas (bórralo al terminar) */
+.grid-cell {
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}

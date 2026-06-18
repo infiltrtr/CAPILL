@@ -2,15 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from './supabaseClient';
 import { PHASES } from './constants';
-import FluidBackground from './FluidBackground'; // <-- Importación garantizada
+import FluidBackground from './FluidBackground';
+import './App.css'; // <-- Asegúrate de tener este import para el CSS del Grid
 
-// Paleta de Mutación: Colores raros fuera del espectro horario tradicional, 100% CMYK-Safe
 const RARE_CMYK_MUTATIONS = [
-  "#A9DFBF", // Verde Salvia / Menta Vintage
-  "#F9E79F", // Amarillo Ocre Pastel / Vainilla
-  "#F5B041", // Naranja Melocotón / Terracota Suave
-  "#A2D9CE", // Verde Azulado Deslavado
-  "#EDBB99"  // Rosa Viejo / Salmón Journaling
+  "#A9DFBF", "#F9E79F", "#F5B041", "#A2D9CE", "#EDBB99"
 ];
 
 function App() {
@@ -23,17 +19,32 @@ function App() {
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [isFinalizing, setIsFinalizing] = useState(false);
 
+  // --- NUEVO: Estado para invocar el Spotlight Input ---
+  const [isInputVisible, setIsInputVisible] = useState(false);
+
   // Estados para la coreografía de inmersión
   const [subtasks, setSubtasks] = useState([
     { id: 1, text: '', completed: false },
     { id: 2, text: '', completed: false },
     { id: 3, text: '', completed: false }
   ]);
-  const [mode, setMode] = useState('input'); // 'input' | 'validating' | 'merging'
+  const [mode, setMode] = useState('input'); 
   const [setsCompleted, setSetsCompleted] = useState(0);
   const [isGuided, setIsGuided] = useState(true);
 
-  // Sincronización segura de estados intermedios
+  // --- NUEVO: Escuchador del comando Ctrl + K ---
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Escucha Ctrl + K o Cmd + K (Mac)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsInputVisible(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const updateSphereData = (updatedSubtasks) => {
     setSpheres(prev => prev.map(s => 
       s.id === activeSphere.id ? { ...s, subtasks: updatedSubtasks, step, setsCompleted, isGuided, mode } : s
@@ -46,7 +57,7 @@ function App() {
       setSpheres(prev => prev.map(s => 
         s.id === activeSphere.id ? { ...s, is_finalized: true, finalSets: setsCompleted } : s
       ));
-      handleBackToEther(); // Salida limpia
+      handleBackToEther(); 
       setIsFinalizing(false);
     }, 3000);
   };
@@ -90,20 +101,18 @@ function App() {
   useEffect(() => {
     const initializeSession = async () => {
       let { data: { user } } = await supabase.auth.getUser();
-
       if (!user) {
         const { data, error } = await supabase.auth.signInAnonymously();
         if (error) return;
         user = data.user;
       }
-
       if (user) {
+        // Traemos todas las tareas pendientes de la base de datos (quitamos el limit 5 aquí)
         const { data, error } = await supabase
           .from('tasks')
           .select('*')
           .eq('is_completed', false)
-          .order('created_at', { ascending: false })
-          .limit(5); 
+          .order('created_at', { ascending: false });
         if (!error && data) setSpheres(data);
       }
       setLoading(false);
@@ -119,12 +128,12 @@ function App() {
   };
 
   const handleCreateSphere = async (e) => {
-    if (e.key === 'Enter' && inputValue.trim() !== "") {
+    if (inputValue.trim() !== "") {
       const currentPhase = getPhaseConfig();
       const { data: { user } } = await supabase.auth.getUser();
 
       let randomColor;
-      if (Math.random() < 0.15) { // 15% Probabilidad Mutación CMYK
+      if (Math.random() < 0.15) { 
         randomColor = RARE_CMYK_MUTATIONS[Math.floor(Math.random() * RARE_CMYK_MUTATIONS.length)];
       } else {
         randomColor = currentPhase.colors[Math.floor(Math.random() * currentPhase.colors.length)];
@@ -136,13 +145,15 @@ function App() {
         type: 'normal',
         phase: currentPhase.name,
         is_completed: false,
-        user_id: user.id 
+        user_id: user.id,
+        is_in_canvas: false // Nueva bandera local
       };
 
       const { data, error } = await supabase.from('tasks').insert([newTask]).select();
       if (!error && data) {
-        setSpheres((prev) => [data[0], ...prev].slice(0, 5));
+        setSpheres((prev) => [data[0], ...prev]);
         setInputValue("");
+        setIsInputVisible(false); // Cierra el buscador al guardar
       }
     }
   };
@@ -156,29 +167,63 @@ function App() {
   }
 
   return (
-    <div className="h-screen w-full bg-capill-paper flex flex-col items-center justify-center overflow-hidden font-sans select-none">
-      <header className="absolute top-10 left-10">
+    <div className="h-screen w-full bg-capill-paper flex flex-col items-center justify-center overflow-hidden font-sans select-none relative">
+      
+      {/* --- NUEVO: RETÍCULA SUIZA 3X3 EN EL FONDO --- */}
+      <div className="canvas-grid">
+        {[...Array(9)].map((_, i) => (
+          <div key={i} className="grid-cell flex items-center justify-center text-black/[0.02] text-xs font-sans">
+            {i + 1}
+          </div>
+        ))}
+      </div>
+
+      <header className="absolute top-10 left-10 z-10">
         <h1 className="text-2xl font-bold tracking-tighter text-capill-ink">
           C<span className="text-red-500">Á</span>PILL
         </h1>
+        <p className="text-[9px] uppercase tracking-widest opacity-30 mt-1">Presiona Ctrl + K para crear</p>
       </header>
 
-      <div className="z-10 w-full max-w-lg px-4">
-        <motion.input
-          autoFocus
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={handleCreateSphere}
-          placeholder="Define tu certeza..."
-          className="w-full bg-transparent text-4xl text-center outline-none border-b border-capill-ink/10 focus:border-capill-ink/30 transition-all p-4 font-light placeholder:opacity-20"
-        />
-      </div>
+      {/* --- SOLUCIÓN: El centro queda 100% libre. El input ahora es un modal Spotlight --- */}
+      <AnimatePresence>
+        {isInputVisible && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsInputVisible(false)} 
+            className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 10 }}
+              onClick={(e) => e.stopPropagation()} 
+              className="w-full max-w-lg bg-white/70 backdrop-blur-2xl border border-white/40 p-6 rounded-2xl shadow-2xl"
+            >
+              <input
+                autoFocus
+                type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCreateSphere(e);
+                }}
+                placeholder="Define tu certeza..."
+                className="w-full bg-transparent text-2xl text-center outline-none p-2 font-light border-b border-capill-ink/10 focus:border-capill-ink/30 text-capill-ink placeholder:opacity-30"
+              />
+              <div className="text-[9px] text-center opacity-30 mt-4 tracking-widest uppercase">PULSA ENTER PARA EMBEBER</div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* DOCK DE BOLITAS EVOLUTIVOS Y ARRASTRABLES */}
+      {/* DOCK CON RESPALDO INTELIGENTE (Fila de espera de 5) */}
       <div className="absolute bottom-10 flex gap-5 p-6 bg-white/20 backdrop-blur-xl rounded-full border border-white/40 shadow-lg z-20">
         <AnimatePresence mode="popLayout">
-          {spheres.map((s) => (
+          {/* CAMBIO CLAVE: Filtramos las que ya están fijas en el lienzo y tomamos solo 5 */}
+          {spheres.filter(s => !s.is_in_canvas).slice(0, 5).map((s) => (
             <motion.div
               key={s.id}
               layout
@@ -215,7 +260,7 @@ function App() {
               }`}
             >
               <span className="absolute -top-12 left-1/2 -translate-x-1/2 bg-capill-ink text-white text-[10px] px-3 py-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl pointer-events-none z-30">
-                {s.title} {s.is_finalized && " ── ¡Arrástrame!"}
+                {s.title} {s.is_finalized && " ── Arrástrame!"}
               </span>
             </motion.div>
           ))}
@@ -231,7 +276,6 @@ function App() {
             style={{ backgroundColor: setsCompleted > 0 ? '#000000' : activeSphere.color }}
             className="fixed inset-0 w-full h-full z-50 flex flex-col items-center justify-center p-6 overflow-hidden transition-colors duration-300 text-white"
           >
-            {/* EL SHADER ANCLADO DEBAJO (Solo aparece si se completa mínimo 1 set) */}
             {setsCompleted > 0 && <FluidBackground baseColor={activeSphere.color} />}
 
             <button 
@@ -356,7 +400,6 @@ function App() {
                         setStep(1);
                         const resetTasks = [{id: 1, text: '', completed: false}, {id: 2, text: '', completed: false}, {id: 3, text: '', completed: false}];
                         setSubtasks(resetTasks);
-                        // Forzar guardado inmediato en el arreglo para que el background lo lea sin delay
                         setSpheres(prev => prev.map(s => 
                           s.id === activeSphere.id ? { ...s, subtasks: resetTasks, step: 1, setsCompleted: nextSets, isGuided: false, mode: 'input' } : s
                         ));
