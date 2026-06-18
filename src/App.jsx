@@ -104,25 +104,50 @@ function App() {
   }, [activeSphere, step]);
 
   useEffect(() => {
-    const initializeSession = async () => {
-      let { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        const { data, error } = await supabase.auth.signInAnonymously();
-        if (error) return;
-        user = data.user;
+  const initializeSession = async () => {
+    let { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      const { data, error } = await supabase.auth.signInAnonymously();
+      if (error) return;
+      user = data.user;
+    }
+    
+    if (user) {
+      // 1. TRAER TAREAS PENDIENTES (Para el Dock)
+      const { data: pendingData, error: pendingError } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('is_completed', false)
+        .order('created_at', { ascending: false });
+      
+      if (!pendingError && pendingData) {
+        // Mapeamos asegurando que inicien con su bandera local en false
+        setSpheres(pendingData.map(t => ({ ...t, is_in_canvas: false })));
       }
-      if (user) {
-        const { data, error } = await supabase
-          .from('tasks')
-          .select('*')
-          .eq('is_completed', false)
-          .order('created_at', { ascending: false });
-        if (!error && data) setSpheres(data);
+
+      // 2. TRAER HISTÓRICO COMPLETADO (Para rehidratar el lienzo de acuarelas)
+      const { data: completedData, error: completedError } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('is_completed', true)
+        .not('canvas_x', 'is', null); // Solo las que ya tienen posición física
+      
+      if (!completedError && completedData) {
+        const loadedPolygons = completedData.map(t => ({
+          id: t.id,
+          title: t.title,
+          color: t.color,
+          x: t.canvas_x,
+          y: t.canvas_y,
+          finalSets: t.sets_completed || 3
+        }));
+        setCanvasPolygons(loadedPolygons);
       }
-      setLoading(false);
-    };
-    initializeSession();
-  }, []);
+    }
+    setLoading(false);
+  };
+  initializeSession();
+}, []);
 
   const getPhaseConfig = () => {
     const hour = new Date().getHours();
@@ -174,15 +199,13 @@ function App() {
     );
   }
 
-  const handleDragEnd = (event, info, task) => {
+  const handleDragEnd = async (event, info, task) => {
   if (!canvasRef.current) return;
 
-  // 1. Obtener la posición del cursor y los límites del rectángulo contenedor central
   const dropX = info.point.x;
   const dropY = info.point.y;
   const rect = canvasRef.current.getBoundingClientRect();
 
-  // 2. Verificar si se soltó dentro de la Zona Segura Central (Safe Area)
   const isInsideCanvas = (
     dropX >= rect.left &&
     dropX <= rect.right &&
@@ -191,30 +214,49 @@ function App() {
   );
 
   if (isInsideCanvas) {
-    // Calcular en qué cuadrante numérico cayó (opcional, para tu metadata/Supabase)
     const col = Math.floor(((dropX - rect.left) / rect.width) * 3);
     const row = Math.floor(((dropY - rect.top) / rect.height) * 3);
-    const gridIndex = Math.clamp?.(row * 3 + col, 0, 8) || (row * 3 + col);
+    const gridIndex = Math.min(Math.max(row * 3 + col, 0), 8);
 
-    // 3. ¡EFECTO ESTAMPA!: Guardamos la figura en las coordenadas exactas donde se soltó
-    // Restamos el origen del contenedor para que la posición sea relativa y responsiva
+    // Coordenadas relativas perfectas para que sea responsivo
+    const localX = dropX - rect.left - 28;
+    const localY = dropY - rect.top - 28;
+
     const newPolygon = {
       id: task.id,
       title: task.title,
       color: task.color,
-      x: dropX - rect.left - 28, // Centramos los 56px (w-14) de la figura en el cursor
-      y: dropY - rect.top - 28,
+      x: localX,
+      y: localY,
       finalSets: task.finalSets || 3
     };
 
+    // 1. Estampado local inmediato
     setCanvasPolygons(prev => [...prev, newPolygon]);
 
-    // Sacamos la tarea del Dock para activar el flujo cascada de respaldo
+    // 2. Deslizar fila en el Dock
     setSpheres(prev => prev.map(s => 
       s.id === task.id ? { ...s, is_in_canvas: true, grid_cell_index: gridIndex } : s
     ));
+
+    // 3. PERSISTENCIA REAL: Sincronización con Supabase
+    const { error } = await supabase
+      .from('tasks')
+      .update({
+        is_completed: true, // Se marca como completada oficialmente
+        grid_cell_index: gridIndex,
+        canvas_x: localX,
+        canvas_y: localY,
+        // Guardamos también las subtareas finales y sets por si acaso
+        subtasks: task.subtasks,
+        sets_completed: task.setsCompleted
+      })
+      .eq('id', task.id);
+
+    if (error) {
+      console.error("Error al persistir posición en el lienzo:", error.message);
+    }
   }
-  // Si se suelta fuera de la zona válida, Framer Motion regresa la bolita al Dock automáticamente
 };
 
   return (
