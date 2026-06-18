@@ -476,14 +476,19 @@ function App() {
               {setsCompleted > 0 && (
                 <motion.button
                   key={`fin-btn-${setsCompleted}`}
+                  // CAMBIO: Nuevas físicas de escala y rotación tridimensional con rebote elástico
                   animate={{ 
-                    rotate: [0, 360], 
+                    rotate: [0, 360], // Tu rotación 2D original
+                    rotateX: isFinalizing ? [0, 20, -20, 0] : [0, 15, 0], // Inclinación 3D en el eje X
+                    scale: isFinalizing ? 1.2 : [0.3, 1.3, 1], // Efecto Bounce In-Out en tamaño
                     x: isFinalizing ? [-2, 2, -2, 2, -1, 1, 0] : 0, 
-                    scale: isFinalizing ? 1.2 : [1, 1.3, 1]
+                    opacity: 1
                   }}
                   transition={{ 
                     rotate: { duration: 0.8, ease: "easeInOut" },
-                    scale: { type: "spring", stiffness: 250, damping: 15 },
+                    // Un resorte con alta rigidez (stiffness) y bajo amortiguamiento (damping) para el rebote 3D
+                    scale: { type: "spring", stiffness: 400, damping: 12 }, 
+                    rotateX: { duration: 0.6, ease: "easeInOut" },
                     x: { repeat: isFinalizing ? Infinity : 0, duration: 0.1 }
                   }}
                   onClick={handleFinalize}
@@ -493,8 +498,8 @@ function App() {
                     backgroundColor: 'rgba(255,255,255,0.15)',
                     perspective: 1000
                   }}
-                  className="absolute bottom-10 right-10 w-20 h-20 backdrop-blur-xl border border-white/40 flex items-center justify-center text-white font-bold cursor-pointer hover:bg-white/30 shadow-[0_0_30px_rgba(255,255,255,0.2)] z-30"
-                >
+// CAMBIO: Añadida la clase 'mix-blend-difference' para invertir el color automáticamente
+                  className="absolute bottom-10 right-10 w-20 h-20 backdrop-blur-xl border border-white/40 flex items-center justify-center text-white font-bold cursor-pointer hover:bg-white/30 shadow-[0_0_30px_rgba(255,255,255,0.2)] mix-blend-difference z-30"                    >
                   <span className="font-sans text-[10px] tracking-widest opacity-60">FIN</span>
                 </motion.button>
               )}
