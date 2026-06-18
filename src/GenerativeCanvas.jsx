@@ -2,22 +2,19 @@ import React, { useMemo, useRef, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
-// 1. CODIGO GLSL: El Fragment Shader encargado de la capilaridad y expansión líquida
 const GenerativeFragmentShader = `
   uniform vec2 u_resolution;
   uniform float u_time;
   uniform int u_count;
-  uniform vec2 u_positions[20]; // Límite máximo de 20 acuarelas
+  uniform vec2 u_positions[20];
   uniform vec3 u_colors[20];
-  uniform float u_shapes[20]; // Guarda la geometría (finalSets)
+  uniform float u_shapes[20];
 
   varying vec2 vUv;
 
-  // Función de ruido Simplex para generar las fibras del papel y capilaridad
   vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
   float snoise(vec2 v){
-    const vec4 C = vec4(0.211324865405187, 0.366025403784439,
-             -0.577350269189626, 0.024390243902439);
+    const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
     vec2 i  = floor(v + dot(v, C.yy) );
     vec2 x0 = v -   i + dot(i, C.xx) ;
     vec2 i1;
@@ -25,11 +22,9 @@ const GenerativeFragmentShader = `
     vec4 x12 = x0.xyxy + C.xxzz;
     x12.xy -= i1;
     i = mod(i, 289.0);
-    vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 ))
-    + i.x + vec3(0.0, i1.x, 1.0 ));
+    vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 )) + i.x + vec3(0.0, i1.x, 1.0 ));
     vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,dot(x12.xy)), dot(x12.zw,dot(x12.zw))), 0.0);
-    m = m*m ;
-    m = m*m ;
+    m = m*m ; m = m*m ;
     vec3 x = 2.0 * fract(p * C.wwww) - 1.0;
     vec3 h = abs(x) - 0.5;
     vec3 ox = floor(x + 0.5);
@@ -42,54 +37,49 @@ const GenerativeFragmentShader = `
   }
 
   void main() {
-    // Normalizamos el espacio de la pantalla suiza
-    vec2 st = gl_FragCoord.xy / u_resolution.xy;
+    // FIX: Usamos vUv para ignorar el Device Pixel Ratio de la pantalla
+    vec2 st = vUv;
+    float aspect = u_resolution.x / u_resolution.y;
+    st.x *= aspect; // Mantenemos las proporciones redondas
     
-    // Crear una textura base de fondo estilo papel acuarela rugoso
-    float paperTexture = snoise(st * 300.0) * 0.02 + 0.98;
-    vec3 finalColor = vec3(paperTexture); // Fondo blanco/crema inicial
+    // Textura base de papel (Blanco puro/crema)
+    float paperTexture = snoise(st * 400.0) * 0.01 + 0.99;
+    vec3 finalColor = vec3(paperTexture);
 
-    // El tiempo controla la velocidad de expansión exponencial de la tinta
-    float expansionRadius = pow(u_time * 0.4, 1.8) * 0.15;
+    float expansionRadius = pow(u_time * 0.5, 1.5) * 0.12;
 
-    // Iteramos sobre cada una de tus acuarelas guardadas
     for(int i = 0; i < 20; i++) {
       if (i >= u_count) break;
 
-      // Convertir la coordenada de píxeles del DOM a espacio normalizado WebGL
       vec2 center = u_positions[i] / u_resolution;
-      center.y = 1.0 - center.y; // Invertir eje Y
+      center.y = 1.0 - center.y; // Invertir el eje Y para alinear HTML con WebGL
+      center.x *= aspect;
 
-      // Distorsión por ruido para emular la capilaridad orgánica de las fibras del papel
-      float noisePattern = snoise(st * 12.0 + u_time * 0.1) * 0.04;
+      float noisePattern = snoise(st * 10.0 + u_time * 0.2) * 0.05;
       float dist = distance(st, center) + noisePattern;
 
-      // El radio inicial depende de los sets completados
-      float baseRadius = 0.05 + (u_shapes[i] * 0.01);
+      float baseRadius = 0.03 + (u_shapes[i] * 0.015);
       float currentRadius = baseRadius + expansionRadius;
 
-      // Renderizado del sangrado líquido (difusión suave en el borde)
       if (dist < currentRadius) {
         float edgeSoftness = 0.08 + (u_time * 0.01);
         float alpha = smoothstep(currentRadius, currentRadius - edgeSoftness, dist);
         
-        // MIX-BLEND-MULTIPLY ANALÓGICO: Multiplicamos las densidades de color
         vec3 inkColor = u_colors[i];
-        vec3 blendedInk = mix(vec3(1.0), inkColor, alpha * 0.85);
+        vec3 blendedInk = mix(vec3(1.0), inkColor, alpha * 0.9);
         finalColor *= blendedInk; 
       }
     }
 
+    // Aseguramos que el alpha sea 1.0 (sólido)
     gl_FragColor = vec4(finalColor, 1.0);
   }
 `;
 
-// 2. COMPONENTE INTERNO: Maneja la actualización de fotogramas del Shader
 function ShaderMesh({ polygons }) {
   const meshRef = useRef();
-  const { size, gl } = useThree();
+  const { size } = useThree();
 
-  // Mapeo y normalización de tus colores HEX a vectores RGB de WebGL [0.0 - 1.0]
   const uniforms = useMemo(() => {
     const positions = Array(20).fill().map(() => new THREE.Vector2());
     const colors = Array(20).fill().map(() => new THREE.Color());
@@ -97,10 +87,10 @@ function ShaderMesh({ polygons }) {
 
     polygons.forEach((poly, index) => {
       if (index < 20) {
-        // Pasamos las posiciones relativas (ajustando el centro geométrico)
+        // Blindaje contra posiciones corruptas
         positions[index].set(poly.x + 28, poly.y + 28);
-        colors[index].set(poly.color);
-        shapes[index] = poly.finalSets;
+        colors[index].set(poly.color || '#E5E7EB');
+        shapes[index] = poly.finalSets || 1;
       }
     });
 
@@ -114,17 +104,14 @@ function ShaderMesh({ polygons }) {
     };
   }, [polygons, size]);
 
-  // Actualizar el tiempo en cada frame para mover la animación líquida
   useFrame((state) => {
     if (meshRef.current) {
-      // Detenemos la expansión exponencial a los 6 segundos para que no se sature el lienzo
-      if (meshRef.current.material.uniforms.u_time.value < 6.0) {
+      if (meshRef.current.material.uniforms.u_time.value < 5.0) {
         meshRef.current.material.uniforms.u_time.value = state.clock.getElapsedTime();
       }
     }
   });
 
-  // Asegurar que responda correctamente al redimensionar la ventana de Vite
   useEffect(() => {
     if (meshRef.current) {
       meshRef.current.material.uniforms.u_resolution.value.set(size.width, size.height);
@@ -150,47 +137,68 @@ function ShaderMesh({ polygons }) {
   );
 }
 
-// 3. COMPONENTE PRINCIPAL EXPORTABLE
 export default function GenerativeCanvas({ polygons, onBack }) {
   const canvasRef = useRef();
 
-  // Función nativa de exportación a alta resolución (Impresión PNG)
+  // EXPORTACIÓN CON BORDE DE IMPRESIÓN SUIZO
   const handleExportImage = () => {
     if (!canvasRef.current) return;
     
-    // Forzamos un renderizado para asegurar la captura del buffer
-    const gl = canvasRef.current.getContext('webgl2');
+    const glCanvas = canvasRef.current;
     
-    const dataURL = canvasRef.current.toDataURL("image/png", 1.0);
+    // 1. Creamos un canvas virtual de alta resolución
+    const exportCanvas = document.createElement('canvas');
+    const ctx = exportCanvas.getContext('2d');
+
+    // 2. Definimos el margen (Bleed) de 80px
+    const bleed = 80; 
+    exportCanvas.width = glCanvas.width + (bleed * 2);
+    exportCanvas.height = glCanvas.height + (bleed * 2);
+
+    // 3. Pintamos el fondo blanco puro con el marco
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+
+    // 4. Estampamos la simulación líquida justo en el centro
+    ctx.drawImage(glCanvas, bleed, bleed);
+
+    // 5. Descarga de alta fidelidad
+    const dataURL = exportCanvas.toDataURL("image/png", 1.0);
     const link = document.createElement("a");
-    link.download = `CAPILL_Lienzo_Generativo_${new Date().toISOString().slice(0,10)}.png`;
+    link.download = `CAPILL_Impresion_${new Date().toISOString().slice(0,10)}.png`;
     link.href = dataURL;
     link.click();
   };
 
   return (
     <div className="fixed inset-0 w-full h-full bg-white z-50 flex flex-col justify-between">
-      {/* El Lienzo de Renderizado */}
       <div className="absolute inset-0 w-full h-full">
+        {/* gl={{ preserveDrawingBuffer: true }} permite extraer los píxeles sin que salga negro */}
         <Canvas 
-          gl={{ preserveDrawingBuffer: true }} // CLAVE: Permite descargar el canvas sin que salga negro
-          onCreated={({ gl }) => { canvasRef.current = gl.domElement; }}
-        >
-          <ShaderMesh polygons={polygons} />
-        </Canvas>
+  // CLAVE DE RENDIMIENTO: Limita la resolución interna (1x a 1.5x máximo)
+  // Evita que monitores 4K/Retina rendericen a resoluciones obscenas y maten los FPS
+  dpr={[1, 1.5]} 
+  
+  gl={{ preserveDrawingBuffer: true, antialias: true }} 
+  onCreated={({ gl }) => { 
+    canvasRef.current = gl.domElement; 
+    gl.setClearColor('#FFFFFF'); 
+  }}
+>
+  <ShaderMesh polygons={polygons} />
+</Canvas>
       </div>
 
-      {/* Menú de Interfaz de Usuario Flotante (UI Suiza Minimalista) */}
       <div className="relative w-full p-8 flex justify-between items-center pointer-events-none z-50">
         <button 
           onClick={onBack}
           className="pointer-events-auto text-xs font-mono tracking-widest text-black/50 hover:text-black transition-colors uppercase"
         >
-          ← Volver al Lienzo
+          ← Volver y Limpiar Lienzo
         </button>
         <button 
           onClick={handleExportImage}
-          className="pointer-events-auto bg-black text-white text-xs font-mono tracking-widest px-6 py-3 rounded-full hover:bg-black/80 transition-all shadow-xl uppercase"
+          className="pointer-events-auto bg-black text-white text-xs font-mono tracking-widest px-8 py-4 rounded-full hover:bg-black/80 transition-all shadow-[0_10px_30px_rgba(0,0,0,0.3)] uppercase"
         >
           Imprimir Obra (PNG)
         </button>
