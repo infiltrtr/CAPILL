@@ -143,20 +143,22 @@ function App() {
       }
 
       // 2. TRAER HISTÓRICO COMPLETADO (Para rehidratar el lienzo de acuarelas)
+            
       const { data: completedData, error: completedError } = await supabase
         .from('tasks')
         .select('*')
         .eq('is_completed', true)
-        .not('canvas_x', 'is', null); // Solo las que ya tienen posición física
-      
+        .not('canvas_x', 'is', null);
+
       if (!completedError && completedData) {
         const loadedPolygons = completedData.map(t => ({
           id: t.id,
           title: t.title,
           color: t.color,
-          x: t.canvas_x,
-          y: t.canvas_y,
-          finalSets: t.sets_completed || 3
+          x: Number(t.canvas_x),
+          y: Number(t.canvas_y),
+          // CORRECCIÓN: Leemos exactamente 'sets_completed' de la base de datos
+          finalSets: Number(t.sets_completed) || 1 
         }));
         setCanvasPolygons(loadedPolygons);
       }
@@ -231,13 +233,11 @@ function App() {
   );
 
   if (isInsideCanvas) {
-    // 1. Cálculos de posición espacial suiza
     const localX = dropX - rect.left - 28;
     const localY = dropY - rect.top - 28;
     
-    const col = Math.floor(((dropX - rect.left) / rect.width) * 3);
-    const row = Math.floor(((dropY - rect.top) / rect.height) * 3);
-    const gridIndex = Math.min(Math.max(row * 3 + col, 0), 8);
+    // Capturamos el número exacto de sets que trae la bolita desde la inmersión
+    const finalSetsCount = task.setsCompleted || 1;
 
     const newPolygon = {
       id: task.id,
@@ -245,33 +245,25 @@ function App() {
       color: task.color,
       x: localX,
       y: localY,
-      finalSets: task.setsCompleted || 1
+      finalSets: finalSetsCount // Guardamos la geometría real localmente
     };
 
-    // 2. Pintado local inmediato en pantalla
     setCanvasPolygons(prev => [...prev, newPolygon]);
     setSpheres(prev => prev.filter(s => s.id !== task.id));
 
-    // 3. ENVIAR A SUPABASE (Mapeado exacto de tus 4 columnas relevantes)
-    const dataToSend = {
-      is_completed: true,
-      canvas_x: localX,
-      canvas_y: localY,
-      grid_cell_index: gridIndex
-    };
-
-    console.log("Intentando guardar en Supabase para el ID:", task.id, dataToSend);
-
+    // Sincronizamos con Supabase incluyendo la columna de sets
     const { error } = await supabase
       .from('tasks')
-      .update(dataToSend)
+      .update({
+        is_completed: true,
+        canvas_x: localX,
+        canvas_y: localY,
+        sets_completed: finalSetsCount // <-- Asegúrate de que esta columna se llame así en tu DB
+      })
       .eq('id', task.id);
 
     if (error) {
-      console.error("ERROR REAL DE SUPABASE:", error.message);
-      alert(`Supabase rechazó el guardado: ${error.message}`);
-    } else {
-      console.log("¡Guardado exitoso en Supabase!");
+      console.error("Error al guardar en Supabase:", error.message);
     }
   }
 };
@@ -440,9 +432,9 @@ function App() {
                 
                 // 6. ESTILO BLINDADO: Aseguramos el color
                 style={{ 
-                  // Si por alguna razón s.color falla, usa un gris claro CMYK-Safe de respaldo
-                  backgroundColor: s.color || '#E5E7EB', 
-                  ...(s.is_finalized ? getShapeStyle(s.finalSets || 3) : { borderRadius: '50%' })
+                  backgroundColor: s.color || '#E5E7EB',
+                  // Si ya se finalizó en inmersión, lee 'setsCompleted'. Si no, mantiene el círculo perfecto.
+                  ...(s.is_finalized ? getShapeStyle(s.setsCompleted || 1) : { borderRadius: '50%' })
                 }}
                 
                 className={`w-14 h-14 border border-white/30 relative group ${
