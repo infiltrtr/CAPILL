@@ -5,7 +5,7 @@ import { PHASES } from './constants';
 import FluidBackground from './FluidBackground';
 import './App.css'; 
 
-import GenerativeCanvas from './GenerativeCanvas';
+import GenerativeCanvas from "./GenerativeCanvas.jsx";
 
 const RARE_CMYK_MUTATIONS = [
   "#A9DFBF", "#F9E79F", "#F5B041", "#A2D9CE", "#EDBB99"
