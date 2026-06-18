@@ -56,15 +56,33 @@ function App() {
   };
 
   const handleFinalize = () => {
-    setIsFinalizing(true);
-    setTimeout(() => {
-      setSpheres(prev => prev.map(s => 
-        s.id === activeSphere.id ? { ...s, is_finalized: true, finalSets: setsCompleted } : s
-      ));
-      handleBackToEther(); 
-      setIsFinalizing(false);
-    }, 500);
-  };
+  setIsFinalizing(true);
+  
+  // Capturamos el valor actual de los sets completados ANTES del delay de salida
+  const finalSetsCount = setsCompleted || 1;
+
+  setTimeout(() => {
+    setSpheres(prev => prev.map(s => 
+      s.id === activeSphere.id 
+        ? { ...s, is_finalized: true, setsCompleted: finalSetsCount } 
+        : s
+    ));
+    
+    // Salida limpia al éter
+    setActiveSphere(null);
+    setStep(1);
+    setMode('input');
+    setSetsCompleted(0);
+    setIsGuided(true);
+    setSubtasks([
+      { id: 1, text: '', completed: false },
+      { id: 2, text: '', completed: false },
+      { id: 3, text: '', completed: false }
+    ]);
+    
+    setIsFinalizing(false);
+  }, 1000); // Reducido a 1 segundo para evitar pérdida de estados reactivos
+};
 
   const getShapeStyle = (sets) => {
     if (sets <= 2) return { borderRadius: '50%' }; 
@@ -205,7 +223,6 @@ function App() {
   const dropY = info.point.y;
   const rect = canvasRef.current.getBoundingClientRect();
 
-  // Verificamos si cayó en la zona segura central
   const isInsideCanvas = (
     dropX >= rect.left &&
     dropX <= rect.right &&
@@ -214,9 +231,13 @@ function App() {
   );
 
   if (isInsideCanvas) {
-    // Coordenadas relativas perfectas (restando el margen del canvas y la mitad de la bolita)
+    // 1. Cálculos de posición espacial suiza
     const localX = dropX - rect.left - 28;
     const localY = dropY - rect.top - 28;
+    
+    const col = Math.floor(((dropX - rect.left) / rect.width) * 3);
+    const row = Math.floor(((dropY - rect.top) / rect.height) * 3);
+    const gridIndex = Math.min(Math.max(row * 3 + col, 0), 8);
 
     const newPolygon = {
       id: task.id,
@@ -224,27 +245,33 @@ function App() {
       color: task.color,
       x: localX,
       y: localY,
-      finalSets: task.setsCompleted || 1 // Usamos la variable exacta de tu estado
+      finalSets: task.setsCompleted || 1
     };
 
-    // 1. Estampado local inmediato en el Lienzo
+    // 2. Pintado local inmediato en pantalla
     setCanvasPolygons(prev => [...prev, newPolygon]);
-
-    // 2. Sacar del Dock local de pendientes
     setSpheres(prev => prev.filter(s => s.id !== task.id));
 
-    // 3. PERSISTENCIA EN SUPABASE: Enviamos solo lo estrictamente necesario
+    // 3. ENVIAR A SUPABASE (Mapeado exacto de tus 4 columnas relevantes)
+    const dataToSend = {
+      is_completed: true,
+      canvas_x: localX,
+      canvas_y: localY,
+      grid_cell_index: gridIndex
+    };
+
+    console.log("Intentando guardar en Supabase para el ID:", task.id, dataToSend);
+
     const { error } = await supabase
       .from('tasks')
-      .update({
-        is_completed: true,   // <--- Usamos tu columna real de la DB
-        canvas_x: localX,
-        canvas_y: localY
-      })
+      .update(dataToSend)
       .eq('id', task.id);
 
     if (error) {
-      console.error("Error crítico al guardar en Supabase:", error.message);
+      console.error("ERROR REAL DE SUPABASE:", error.message);
+      alert(`Supabase rechazó el guardado: ${error.message}`);
+    } else {
+      console.log("¡Guardado exitoso en Supabase!");
     }
   }
 };
