@@ -90,27 +90,25 @@ function App() {
 };
 
 const handleClearCanvas = async () => {
-  // 1. Limpieza visual inmediata en el estado de React
+  // 1. Limpieza visual inmediata en el estado de React (El lienzo amanece blanco)
   setCanvasPolygons([]);
 
-  // 2. Limpieza real en Supabase: 
-  // Modificamos SOLO las tareas completadas que tienen posición en el lienzo.
-  // En lugar de borrarlas (DELETE), les quitamos las coordenadas y el 'is_completed'
-  // para que regresen al flujo si es necesario, o simplemente las desvinculamos del lienzo.
+  // 2. Sincronización con Supabase:
+  // Dejamos 'is_completed: true' para que se queden archivadas para siempre.
+  // Al poner las coordenadas en null, desaparecen del lienzo pero no regresan al Dock.
   const { error } = await supabase
     .from('tasks')
     .update({
       canvas_x: null,
       canvas_y: null,
-      grid_cell_index: null,
-      is_completed: false // Si quieres que vuelvan al Dock como pendientes, pon 'false'. Si quieres archivarlas para siempre, déjalo en 'true'.
+      is_completed: true // 🌟 CAMBIO CLAVE: Mantenemos la certeza sellada e ignorada por el Dock
     })
-    .not('canvas_x', 'is', null); // Solo afecta a las que estaban pintadas
+    .not('canvas_x', 'is', null); // Solo afecta a las que estaban pintadas en esta sesión
 
   if (error) {
     console.error("Error al limpiar el lienzo en Supabase:", error.message);
   } else {
-    // Re-indexamos las tareas para que el Dock se vuelva a llenar con lo que quedó en el éter
+    // Re-indexamos las tareas pendientes reales del éter para asegurar que el Dock esté al día
     const { data: pendingData } = await supabase
       .from('tasks')
       .select('*')
