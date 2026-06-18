@@ -39,7 +39,7 @@ function App() {
       setSpheres(newSpheres);
       resetImmersive();
       setIsFinalizing(false);
-    }, 3000);
+    }, 1500);
   };
 
   // Función para obtener el polígono CSS según los sets completados
@@ -180,21 +180,22 @@ function App() {
         <AnimatePresence mode="popLayout">
           {spheres.map((s) => (
             <motion.div
-              key={s.id}
-              layout
-              layoutId={`sphere-container-${s.id}`}
-              initial={{ scale: 0, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0, opacity: 0 }}
-              whileHover={s.is_finalized ? {} : { y: -10, scale: 1.1 }}
-              onClick={() => {
-                if (!s.is_finalized) setActiveSphere(s);
-              }}
-              style={{ backgroundColor: s.color }}
-              className={`w-14 h-14 rounded-full border border-white/30 relative group transition-all duration-300 ${
-                s.is_finalized ? 'opacity-30 grayscale cursor-not-allowed' : 'cursor-pointer'
-              }`}
-            >
+            key={s.id}
+            layout
+            layoutId={`sphere-container-${s.id}`}
+            initial={{ scale: 0, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0, opacity: 0 }}
+            whileHover={s.is_finalized ? {} : { y: -10, scale: 1.1 }}
+            onClick={() => {
+              if (!s.is_finalized) setActiveSphere(s);
+            }}
+            style={{ backgroundColor: s.color }}
+            // CAMBIO CLAVE: Eliminado 'transition-all duration-300' para que FramerMotion haga la magia sin lag
+            className={`w-14 h-14 rounded-full border border-white/30 relative group ${
+              s.is_finalized ? 'opacity-30 grayscale cursor-not-allowed' : 'cursor-pointer'
+            }`}
+          >
               <span className="absolute -top-12 left-1/2 -translate-x-1/2 bg-capill-ink text-white text-[10px] px-3 py-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl">
                 {s.title}
               </span>
@@ -293,8 +294,16 @@ function App() {
                         rotateY: task.completed ? 360 : 0, 
                         scale: mode === 'merging' ? 0 : (mode === 'validating' ? 1.5 : (isCurrentOrPast ? 1.1 : 1)),
                       }}
-                      style={{ perspective: 1000 }} 
-                      onClick={() => {
+                      key={`circle-${index}`}
+                        layout
+                        animate={{ 
+                          rotateY: task.completed ? 360 : 0, 
+                          scale: mode === 'merging' ? 0 : (mode === 'validating' ? 1.5 : (isCurrentOrPast ? 1.1 : 1)),
+                        }}
+                        // CAMBIO CLAVE: Reactividad sutil al hacer hover durante la validación
+                        whileHover={mode === 'validating' && !task.completed ? { scale: 1.6, y: -5 } : {}}
+                        style={{ perspective: 1000 }} 
+                        onClick={() => {
                         if (mode === 'validating') {
                           const newTasks = [...subtasks];
                           newTasks[index].completed = !newTasks[index].completed;
@@ -347,30 +356,34 @@ function App() {
             </motion.div>
 
             <AnimatePresence>
-              {setsCompleted > 0 && (
-                <motion.button
-                  animate={{ 
-                    rotate: [0, 360], 
-                    x: isFinalizing ? [-2, 2, -2, 2, -1, 1, 0] : 0, 
-                    scale: isFinalizing ? 1.2 : 1
-                  }}
-                  transition={{ 
-                    rotate: { duration: 0.8, ease: "easeInOut" },
-                    x: { repeat: isFinalizing ? Infinity : 0, duration: 0.1 }
-                  }}
-                  onClick={handleFinalize}
-                  disabled={isFinalizing}
-                  style={{ 
-                    ...getShapeStyle(setsCompleted), 
-                    backgroundColor: 'rgba(255,255,255,0.15)',
-                    perspective: 1000
-                  }}
-                  className="absolute bottom-10 right-10 w-20 h-20 backdrop-blur-xl border border-white/40 flex items-center justify-center text-white font-bold cursor-pointer hover:bg-white/30 transition-colors shadow-[0_0_30px_rgba(255,255,255,0.2)] z-30"
-                >
-                  <span className="font-sans text-[10px] tracking-widest opacity-60">FIN</span>
-                </motion.button>
-              )}
-            </AnimatePresence>
+            {setsCompleted > 0 && (
+              <motion.button
+                key={`fin-btn-${setsCompleted}`} // <-- CAMBIO CLAVE: Esto fuerza a que el spin se repita por cada set nuevo
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ 
+                  rotate: [0, 360], 
+                  x: isFinalizing ? [-2, 2, -2, 2, -1, 1, 0] : 0, 
+                  scale: isFinalizing ? 1.2 : [1, 1.3, 1], // Animación Bouncy restaurada
+                  opacity: 1
+                }}
+                transition={{ 
+                  rotate: { duration: 0.8, ease: "easeInOut" },
+                  scale: { type: "spring", stiffness: 250, damping: 15 },
+                  x: { repeat: isFinalizing ? Infinity : 0, duration: 0.1 }
+                }}
+                onClick={handleFinalize}
+                disabled={isFinalizing}
+                style={{ 
+                  ...getShapeStyle(setsCompleted), 
+                  backgroundColor: 'rgba(255,255,255,0.15)',
+                  perspective: 1000
+                }}
+                className="absolute bottom-10 right-10 w-20 h-20 backdrop-blur-xl border border-white/40 flex items-center justify-center text-white font-bold cursor-pointer hover:bg-white/30 shadow-[0_0_30px_rgba(255,255,255,0.2)] z-30"
+              >
+                <span className="font-sans text-[10px] tracking-widest opacity-60">FIN</span>
+              </motion.button>
+            )}
+          </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>
